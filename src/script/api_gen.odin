@@ -18,7 +18,30 @@ register_gen :: proc(L: ^lua.State) {
 	reg(L, "gen_mesh_terrain", l_gen_mesh_terrain)
 	reg(L, "gen_mesh", l_gen_mesh)
 	reg(L, "gen_pixels", l_gen_pixels)
+	reg(L, "gen_shader", l_gen_shader)
 	reg(L, "noise", l_noise)
+}
+
+// gen_shader(name, fragment_code) -> ok
+// Full GLSL 330 fragment source; raylib's default vertex shader provides
+// fragTexCoord/fragColor. Compile failure returns false (old shader, if
+// any, stays registered) and prints the GLSL log to the console.
+l_gen_shader :: proc "c" (L: ^lua.State) -> c.int {
+	name := lua.L_checkstring(L, 1)
+	code := lua.L_checkstring(L, 2)
+	context = g_ctx
+
+	r: engine.GenRecipe
+	r.name = strings.clone(string(name))
+	r.kind = strings.clone("shader")
+	r.variant = strings.clone("fragment")
+	it := string(code)
+	for line in strings.split_lines_iterator(&it) {
+		append(&r.rows, strings.clone(line))
+	}
+	ok := engine.apply_recipe(g_eng, r)
+	lua.pushboolean(L, b32(ok))
+	return 1
 }
 
 // gen_pixels(name, rows, palette) — pixel-art texture from an array of row

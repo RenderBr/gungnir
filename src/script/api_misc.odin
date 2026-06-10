@@ -16,7 +16,59 @@ register_misc :: proc(L: ^lua.State) {
 	reg(L, "load_level", l_load_level)
 	reg(L, "save_level", l_save_level)
 	reg(L, "set_crt", l_set_crt)
+	reg(L, "set_screen_shader", l_set_screen_shader)
+	reg(L, "set_shader_param", l_set_shader_param)
 	reg(L, "set_fullscreen", l_set_fullscreen)
+	reg(L, "set_lighting", l_set_lighting)
+	reg(L, "set_ambient", l_set_ambient)
+}
+
+// set_lighting(on) — 2D lightmap over the world + per-model lit 3D shading.
+l_set_lighting :: proc "c" (L: ^lua.State) -> c.int {
+	on := b32(lua.toboolean(L, 1))
+	context = g_ctx
+	engine.lighting_enable(g_eng, bool(on))
+	return 0
+}
+
+// set_ambient(r, g, b) — base light level when lighting is on.
+l_set_ambient :: proc "c" (L: ^lua.State) -> c.int {
+	r := arg_u8(L, 1)
+	g := arg_u8(L, 2)
+	b := arg_u8(L, 3)
+	g_eng.lighting.ambient = {r, g, b, 255}
+	return 0
+}
+
+// set_screen_shader(name | nil) — full-screen pass over the game image;
+// applies before the CRT filter when both are on.
+l_set_screen_shader :: proc "c" (L: ^lua.State) -> c.int {
+	name := lua.L_optstring(L, 1, "")
+	context = g_ctx
+	if string(name) != "" && !engine.has_shader(g_eng, string(name)) {
+		lua.L_error(L, "set_screen_shader: unknown shader '%s' (call gen_shader first)", name)
+	}
+	engine.postfx_set_screen_shader(g_eng, string(name))
+	return 0
+}
+
+// set_shader_param(shader, param, x [, y, z, w]) — float/vec2/vec3/vec4.
+l_set_shader_param :: proc "c" (L: ^lua.State) -> c.int {
+	name := lua.L_checkstring(L, 1)
+	param := lua.L_checkstring(L, 2)
+	n := lua.gettop(L) - 2
+	if n < 1 || n > 4 {
+		lua.L_error(L, "set_shader_param: pass 1 to 4 numbers")
+	}
+	vals: [4]f32
+	for i in 0 ..< n {
+		vals[i] = f32(lua.L_checknumber(L, 3 + i))
+	}
+	context = g_ctx
+	if !engine.set_shader_param(g_eng, string(name), string(param), vals[:n]) {
+		lua.L_error(L, "set_shader_param: unknown shader '%s' (call gen_shader first)", name)
+	}
+	return 0
 }
 
 // set_crt(on) — arcade CRT filter: curvature, scanlines, grille, glow.

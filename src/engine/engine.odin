@@ -12,6 +12,7 @@ Engine :: struct {
 	scene:       Scene,
 	assets:      Assets,
 	postfx:      Postfx,
+	lighting:    Lighting,
 }
 
 // Requires an open window (textures need a GL context) and audio device.
@@ -27,6 +28,7 @@ init :: proc(e: ^Engine, game_dir: string) {
 		fovy       = 60,
 		projection = .PERSPECTIVE,
 	}
+	e.lighting.ambient = {60, 60, 75, 255}
 	assets_init(&e.assets)
 }
 
@@ -34,4 +36,5 @@ destroy :: proc(e: ^Engine) {
 	scene_destroy(&e.scene)
 	assets_destroy(&e.assets)
 	postfx_destroy(e)
+	lighting_destroy(e)
 }

@@ -1,47 +1,77 @@
 package engine
 
+import "core:strings"
 import rl "vendor:raylib"
 
-// CRT post-processing: the frame renders into a fixed logical-resolution
-// canvas, then draws to the window through the shader below, aspect-fit
-// with black bars. The editor bypasses it (main sets `bypass`).
+// Post-processing chain: the frame renders into a fixed logical-resolution
+// canvas, then draws to the window through an optional user screen shader
+// and/or the CRT shader below, aspect-fit with black bars. The editor
+// bypasses the whole chain (main sets `bypass`).
 Postfx :: struct {
-	enabled:  bool,
-	bypass:   bool,
-	ready:    bool,
-	rt:       rl.RenderTexture2D,
-	shader:   rl.Shader,
-	time_loc: i32,
-	res_loc:  i32,
-	w, h:     i32,
+	crt_enabled:   bool,
+	bypass:        bool,
+	ready:         bool,
+	frame_active:  bool, // latched by begin_frame, consumed by end_frame
+	rt:            rl.RenderTexture2D, // scene canvas
+	rt2:           rl.RenderTexture2D, // chain intermediate (user -> crt)
+	crt_shader:    rl.Shader,
+	crt_time_loc:  i32,
+	crt_res_loc:   i32,
+	screen_shader: string, // owned; "" = none; key into assets.shaders
+	w, h:          i32,
 }
 
 LOGICAL_W :: 960
 LOGICAL_H :: 600
 
+// Lazily creates the logical canvas + chain RT + CRT shader; either the CRT
+// or a user screen shader pulls the whole pipeline in.
+postfx_ensure :: proc(e: ^Engine) {
+	if e.postfx.ready {
+		return
+	}
+	e.postfx.w, e.postfx.h = LOGICAL_W, LOGICAL_H
+	e.postfx.rt = rl.LoadRenderTexture(e.postfx.w, e.postfx.h)
+	rl.SetTextureFilter(e.postfx.rt.texture, .BILINEAR)
+	e.postfx.rt2 = rl.LoadRenderTexture(e.postfx.w, e.postfx.h)
+	rl.SetTextureFilter(e.postfx.rt2.texture, .BILINEAR)
+	e.postfx.crt_shader = rl.LoadShaderFromMemory(nil, CRT_FS)
+	e.postfx.crt_time_loc = rl.GetShaderLocation(e.postfx.crt_shader, "time")
+	e.postfx.crt_res_loc = rl.GetShaderLocation(e.postfx.crt_shader, "resolution")
+	e.postfx.ready = true
+}
+
 postfx_enable :: proc(e: ^Engine, on: bool) {
-	e.postfx.enabled = on
-	if on && !e.postfx.ready {
-		e.postfx.w, e.postfx.h = LOGICAL_W, LOGICAL_H
-		e.postfx.rt = rl.LoadRenderTexture(e.postfx.w, e.postfx.h)
-		rl.SetTextureFilter(e.postfx.rt.texture, .BILINEAR)
-		e.postfx.shader = rl.LoadShaderFromMemory(nil, CRT_FS)
-		e.postfx.time_loc = rl.GetShaderLocation(e.postfx.shader, "time")
-		e.postfx.res_loc = rl.GetShaderLocation(e.postfx.shader, "resolution")
-		e.postfx.ready = true
+	e.postfx.crt_enabled = on
+	if on {
+		postfx_ensure(e)
 	}
 }
 
+// name == "" clears. Caller (script layer) validates existence for the
+// friendly error; this just stores the owned name.
+postfx_set_screen_shader :: proc(e: ^Engine, name: string) {
+	if name != "" {
+		postfx_ensure(e)
+	}
+	delete(e.postfx.screen_shader)
+	e.postfx.screen_shader = strings.clone(name)
+}
+
 postfx_active :: proc(e: ^Engine) -> bool {
-	return e.postfx.enabled && !e.postfx.bypass && e.postfx.ready
+	return e.postfx.ready && !e.postfx.bypass &&
+		(e.postfx.crt_enabled || e.postfx.screen_shader != "")
 }
 
 postfx_destroy :: proc(e: ^Engine) {
 	if e.postfx.ready {
 		rl.UnloadRenderTexture(e.postfx.rt)
-		rl.UnloadShader(e.postfx.shader)
+		rl.UnloadRenderTexture(e.postfx.rt2)
+		rl.UnloadShader(e.postfx.crt_shader)
 		e.postfx.ready = false
 	}
+	delete(e.postfx.screen_shader)
+	e.postfx.screen_shader = ""
 }
 
 // The size scripts should lay out against: the CRT canvas when active,

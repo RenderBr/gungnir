@@ -66,7 +66,7 @@ entity_box :: proc(e: ^engine.Engine, ent: ^engine.Entity) -> rl.BoundingBox {
 	}
 }
 
-// Nearest mesh entity under the cursor.
+// Nearest mesh or light entity under the cursor.
 pick_3d :: proc(e: ^engine.Engine, cam: rl.Camera3D, mouse: rl.Vector2) -> engine.EntityId {
 	ray := rl.GetScreenToWorldRay(mouse, cam)
 	best := ~engine.EntityId(0)
@@ -75,7 +75,9 @@ pick_3d :: proc(e: ^engine.Engine, cam: rl.Camera3D, mouse: rl.Vector2) -> engin
 		if !ent.alive {
 			continue
 		}
-		if _, is_mesh := ent.variant.(engine.MeshRef); !is_mesh {
+		#partial switch _ in ent.variant {
+		case engine.MeshRef, engine.Light:
+		case:
 			continue
 		}
 		hit := rl.GetRayCollisionBox(ray, entity_box(e, &ent))
@@ -140,6 +142,14 @@ update_3d :: proc(ed: ^Editor, e: ^engine.Engine) {
 // Grid and selection box. Runs inside the 3D pass while editing in 3D view.
 draw_world_3d :: proc(ed: ^Editor, e: ^engine.Engine) {
 	rl.DrawGrid(64, 8)
+	for &ent in e.scene.entities {
+		if !ent.alive {
+			continue
+		}
+		if _, is_light := ent.variant.(engine.Light); is_light {
+			rl.DrawSphereWires(ent.pos, 1, 6, 6, ent.tint)
+		}
+	}
 	if ent := engine.get(&e.scene, ed.selected); ent != nil {
 		if _, is_mesh := ent.variant.(engine.MeshRef); is_mesh {
 			rl.DrawBoundingBox(entity_box(e, ent), rl.GOLD)

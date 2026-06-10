@@ -104,4 +104,11 @@ spawn_mesh :: proc(s: ^Scene, model: string, x, y, z: f32) -> EntityId {
 	return spawn(s, e)
 }
 
+spawn_light :: proc(s: ^Scene, x, y, z: f32) -> EntityId {
+	e := entity_defaults()
+	e.pos = {x, y, z}
+	e.variant = Light{kind = .Point, radius = 160, intensity = 1}
+	return spawn(s, e)
+}
+
 _ :: rl

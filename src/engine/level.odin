@@ -11,15 +11,18 @@ import "../gen"
 // format. Generated assets are stored as recipes and regenerated on load.
 
 LevelEntityDTO :: struct {
-	kind:      string, // "sprite" | "rect" | "circle" | "label" | "mesh"
+	kind:      string, // "sprite" | "rect" | "circle" | "label" | "mesh" | "light"
 	name:      string,
 	ref:       string, // texture/model name, or label text
 	pos:       [3]f32,
 	rot:       [3]f32,
 	scale:     [3]f32,
 	tint:      string, // hex
+	shader:    string, // optional custom shader name
 	size:      [2]f32, // shapes
 	text_size: f32,    // labels
+	radius:    f32,    // lights
+	intensity: f32,    // lights
 }
 
 RecipeDTO :: struct {
@@ -79,6 +82,7 @@ save_level :: proc(e: ^Engine, path: string) -> bool {
 			rot   = {ent.rot.x, ent.rot.y, ent.rot.z},
 			scale = {ent.scale.x, ent.scale.y, ent.scale.z},
 			tint  = gen.color_to_hex(ent.tint),
+			shader = ent.shader,
 		}
 		switch v in ent.variant {
 		case Sprite:
@@ -94,6 +98,11 @@ save_level :: proc(e: ^Engine, path: string) -> bool {
 		case MeshRef:
 			d.kind = "mesh"
 			d.ref = v.model
+		case Light:
+			d.kind = "light"
+			d.ref = v.kind == .Directional ? "directional" : "point"
+			d.radius = v.radius
+			d.intensity = v.intensity
 		}
 		append(&ents, d)
 	}
@@ -155,6 +164,9 @@ load_level :: proc(e: ^Engine, path: string) -> bool {
 		if d.tint != "" {
 			ent.tint = gen.parse_hex_color(d.tint)
 		}
+		if d.shader != "" {
+			ent.shader = strings.clone(d.shader)
+		}
 		switch d.kind {
 		case "sprite":
 			ent.variant = Sprite{texture = strings.clone(d.ref)}
@@ -166,6 +178,12 @@ load_level :: proc(e: ^Engine, path: string) -> bool {
 			ent.variant = Label{text = strings.clone(d.ref), size = d.text_size > 0 ? d.text_size : 20}
 		case "mesh":
 			ent.variant = MeshRef{model = strings.clone(d.ref)}
+		case "light":
+			ent.variant = Light{
+				kind      = d.ref == "directional" ? .Directional : .Point,
+				radius    = d.radius > 0 ? d.radius : 160,
+				intensity = d.intensity > 0 ? d.intensity : 1,
+			}
 		case:
 			continue
 		}

@@ -133,6 +133,7 @@ variant_label :: proc(ent: ^engine.Entity) -> string {
 	case engine.Shape:   return v.kind == .Circle ? "circle" : "rect"
 	case engine.Label:   return "text"
 	case engine.MeshRef: return v.model
+	case engine.Light:   return "light"
 	}
 	return "entity"
 }
@@ -216,6 +217,14 @@ draw_inspector :: proc(ed: ^Editor, e: ^engine.Engine, w: f32) {
 		}
 		y += 26
 		drag_number(ed, 9, {pad, y, fw / 2 - 2, 20}, "size", &v.size, 0.5)
+		y += 30
+	case engine.Light:
+		if rl.GuiButton({pad, y, fw, 22}, v.kind == .Point ? "kind: point" : "kind: directional") {
+			v.kind = v.kind == .Point ? .Directional : .Point
+		}
+		y += 26
+		drag_number(ed, 11, {pad, y, fw / 2 - 2, 20}, "radius", &v.radius, 1)
+		drag_number(ed, 12, {pad + fw / 2 + 2, y, fw / 2 - 2, 20}, "power", &v.intensity, 0.05)
 		y += 30
 	}
 
@@ -312,6 +321,9 @@ draw_spawn_bar :: proc(ed: ^Editor, e: ^engine.Engine, w, h: f32) {
 			break
 		}
 		spawned = engine.spawn_sprite(&e.scene, name, center.x, center.y)
+	}
+	if rl.GuiButton({314, y, 70, 24}, "+ light") {
+		spawned = engine.spawn_light(&e.scene, center.x, center.y, 0)
 	}
 	if ent := engine.get(&e.scene, spawned); ent != nil {
 		ed.selected = spawned

@@ -1,5 +1,6 @@
 package engine
 
+import "core:strings"
 import rl "vendor:raylib"
 import "../gen"
 
@@ -40,15 +41,21 @@ param :: proc(r: GenRecipe, key: string, def: f64) -> f64 {
 }
 
 // Takes ownership of the recipe, generates the asset, registers both.
-// The single code path for scripts, level loading, and editor regen.
-apply_recipe :: proc(e: ^Engine, r: GenRecipe) {
-	generate_from_recipe(e, r)
+// Returns false (recipe freed, nothing stored) if generation failed —
+// today only "shader" can fail (GLSL compile error).
+apply_recipe :: proc(e: ^Engine, r: GenRecipe) -> bool {
+	if !generate_from_recipe(e, r) {
+		r := r
+		recipe_free(&r)
+		return false
+	}
 	store_recipe(e, r)
+	return true
 }
 
 // Regenerates the asset without touching recipe storage. The editor calls
 // this after mutating a stored recipe's fields in place.
-generate_from_recipe :: proc(e: ^Engine, r: GenRecipe) {
+generate_from_recipe :: proc(e: ^Engine, r: GenRecipe) -> bool {
 	switch r.kind {
 	case "texture":
 		opts := gen.default_texture_opts()
@@ -148,7 +155,12 @@ generate_from_recipe :: proc(e: ^Engine, r: GenRecipe) {
 		wave := gen.gen_sound_wave(opts)
 		register_sound(e, r.name, rl.LoadSoundFromWave(wave))
 		rl.UnloadWave(wave)
+
+	case "shader":
+		code := strings.join(r.rows[:], "\n", context.temp_allocator)
+		return register_shader(e, r.name, code)
 	}
+	return true
 }
 
 @(private = "file")

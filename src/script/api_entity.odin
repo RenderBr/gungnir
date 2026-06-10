@@ -22,6 +22,48 @@ register_entity :: proc(L: ^lua.State) {
 	reg(L, "set_text", l_set_text)
 	reg(L, "set_flip", l_set_flip)
 	reg(L, "set_texture", l_set_texture)
+	reg(L, "set_entity_shader", l_set_entity_shader)
+	reg(L, "spawn_light", l_spawn_light)
+	reg(L, "set_light", l_set_light)
+}
+
+// spawn_light(x, y [, z]) -> id — point light; set_tint = color, set_pos moves it.
+l_spawn_light :: proc "c" (L: ^lua.State) -> c.int {
+	x := arg_f32(L, 1)
+	y := arg_f32(L, 2)
+	z := opt_f32(L, 3, 0)
+	context = g_ctx
+	id := engine.spawn_light(&g_eng.scene, x, y, z)
+	lua.pushinteger(L, lua.Integer(id))
+	return 1
+}
+
+// set_light(id, radius [, intensity])
+l_set_light :: proc "c" (L: ^lua.State) -> c.int {
+	ent := arg_entity(L, 1, "set_light")
+	radius := arg_f32(L, 2)
+	light, ok := &ent.variant.(engine.Light)
+	if !ok {
+		lua.L_error(L, "set_light: entity is not a light")
+	}
+	light.radius = radius
+	light.intensity = clamp(opt_f32(L, 3, light.intensity), 0, engine.MAX_INTENSITY)
+	return 0
+}
+
+// set_entity_shader(id [, name]) — nil/"" restores the default pipeline.
+l_set_entity_shader :: proc "c" (L: ^lua.State) -> c.int {
+	ent := arg_entity(L, 1, "set_entity_shader")
+	name := lua.L_optstring(L, 2, "")
+	context = g_ctx
+	if string(name) != "" && !engine.has_shader(g_eng, string(name)) {
+		lua.L_error(L, "set_entity_shader: unknown shader '%s' (call gen_shader first)", name)
+	}
+	if ent.shader != string(name) {
+		delete(ent.shader)
+		ent.shader = strings.clone(string(name))
+	}
+	return 0
 }
 
 // set_texture(id, name) — swap a sprite entity's texture (animation frames).

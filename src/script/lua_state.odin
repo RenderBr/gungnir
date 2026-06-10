@@ -167,7 +167,18 @@ call_callback :: proc(s: ^Script, name: cstring, args: ..f64) -> bool {
 	return true
 }
 
-call_update :: proc(s: ^Script, dt: f32) { call_callback(s, "on_update", f64(dt)) }
+// The prelude dispatcher (components, parenting, pruning) calls the user's
+// on_update itself; fall back to plain on_update when it is absent so old
+// games run unmodified even if the prelude failed to load.
+call_update :: proc(s: ^Script, dt: f32) {
+	if s.broken || s.L == nil {
+		return
+	}
+	lua.getglobal(s.L, "__gungnir_update")
+	has_hook := lua.isfunction(s.L, -1)
+	lua.pop(s.L, 1)
+	call_callback(s, has_hook ? "__gungnir_update" : "on_update", f64(dt))
+}
 call_draw :: proc(s: ^Script)            { call_callback(s, "on_draw") }
 call_draw_3d :: proc(s: ^Script)         { call_callback(s, "on_draw_3d") }
 call_gui :: proc(s: ^Script)             { call_callback(s, "on_gui") }

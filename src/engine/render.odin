@@ -9,7 +9,10 @@ import rl "vendor:raylib"
 // artifacts. main.odin composes these; nothing else may open rl modes.
 
 begin_frame :: proc(e: ^Engine) {
-	if postfx_active(e) {
+	// Latch: scripts may toggle crt/screen shader mid-frame (on_draw); the
+	// end of this frame must match how it began.
+	e.postfx.frame_active = postfx_active(e)
+	if e.postfx.frame_active {
 		rl.BeginTextureMode(e.postfx.rt)
 	} else {
 		rl.BeginDrawing()
@@ -18,30 +21,63 @@ begin_frame :: proc(e: ^Engine) {
 }
 
 end_frame :: proc(e: ^Engine) {
-	if postfx_active(e) {
+	if e.postfx.frame_active {
 		rl.EndTextureMode()
+
+		w := f32(e.postfx.w)
+		h := f32(e.postfx.h)
+		user, has_user := get_shader(e, e.postfx.screen_shader)
+		crt := e.postfx.crt_enabled
+
+		src := e.postfx.rt
+		if has_user && crt {
+			// chain stage 1: user shader at logical resolution into rt2,
+			// so the CRT pass then warps the already-processed image.
+			rl.BeginTextureMode(e.postfx.rt2)
+			rl.ClearBackground(rl.BLACK)
+			shader_set_auto_uniforms(user, w, h)
+			rl.BeginShaderMode(user.shader)
+			rl.DrawTexturePro(src.texture, {0, 0, w, -h}, {0, 0, w, h}, {}, 0, rl.WHITE)
+			rl.EndShaderMode()
+			rl.EndTextureMode()
+			src = e.postfx.rt2
+		}
+
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.BLACK)
 
-		t := f32(rl.GetTime())
-		rl.SetShaderValue(e.postfx.shader, rl.ShaderLocationIndex(e.postfx.time_loc), &t, .FLOAT)
-		res := [2]f32{f32(e.postfx.w), f32(e.postfx.h)}
-		rl.SetShaderValue(e.postfx.shader, rl.ShaderLocationIndex(e.postfx.res_loc), &res, .VEC2)
-
 		sw := f32(rl.GetScreenWidth())
 		sh := f32(rl.GetScreenHeight())
-		scale := min(sw / f32(e.postfx.w), sh / f32(e.postfx.h))
-		dw := f32(e.postfx.w) * scale
-		dh := f32(e.postfx.h) * scale
+		scale := min(sw / w, sh / h)
+		dw := w * scale
+		dh := h * scale
 
-		rl.BeginShaderMode(e.postfx.shader)
+		final: rl.Shader
+		use_final := false
+		if crt {
+			t := f32(rl.GetTime())
+			rl.SetShaderValue(e.postfx.crt_shader, rl.ShaderLocationIndex(e.postfx.crt_time_loc), &t, .FLOAT)
+			res := [2]f32{w, h}
+			rl.SetShaderValue(e.postfx.crt_shader, rl.ShaderLocationIndex(e.postfx.crt_res_loc), &res, .VEC2)
+			final = e.postfx.crt_shader
+			use_final = true
+		} else if has_user {
+			shader_set_auto_uniforms(user, w, h)
+			final = user.shader
+			use_final = true
+		}
+		if use_final {
+			rl.BeginShaderMode(final)
+		}
 		rl.DrawTexturePro(
-			e.postfx.rt.texture,
-			{0, 0, f32(e.postfx.w), -f32(e.postfx.h)}, // RT is vertically flipped
+			src.texture,
+			{0, 0, w, -h}, // RT is vertically flipped
 			{(sw - dw) / 2, (sh - dh) / 2, dw, dh},
 			{}, 0, rl.WHITE,
 		)
-		rl.EndShaderMode()
+		if use_final {
+			rl.EndShaderMode()
+		}
 	}
 	rl.EndDrawing()
 }
@@ -63,7 +99,14 @@ end_3d :: proc(e: ^Engine) {
 }
 
 // Draws all alive MeshRef entities. Call between begin_3d and end_3d.
+// When lighting has ever been enabled, model materials get the lit (or
+// default) shader each frame; the materials pointer is shared with the asset
+// registry, so the assignment persists intentionally.
 draw_entities_3d :: proc(e: ^Engine) {
+	lit := lighting_active(e)
+	if lit {
+		lighting_upload_3d(e)
+	}
 	for &ent in e.scene.entities {
 		if !ent.alive {
 			continue
@@ -76,11 +119,36 @@ draw_entities_3d :: proc(e: ^Engine) {
 		if !ok {
 			continue
 		}
+		if e.lighting.ready {
+			sh := lit ? e.lighting.shader3d : e.lighting.default_shader
+			for i in 0 ..< mdl.materialCount {
+				mdl.materials[i].shader = sh
+			}
+		}
 		// Shallow copy so the per-entity euler rotation doesn't stick.
 		mdl.transform = rl.MatrixRotateXYZ(
 			{ent.rot.x * rl.DEG2RAD, ent.rot.y * rl.DEG2RAD, ent.rot.z * rl.DEG2RAD},
 		)
+		// BeginShaderMode doesn't affect DrawModelEx — DrawMesh uses
+		// material.shader directly, and materials are shared with the
+		// registry model, so swap in and restore after the draw.
+		sa, shaded := get_shader(e, ent.shader)
+		saved: []rl.Shader
+		if shaded {
+			lw, lh := logical_size(e)
+			shader_set_auto_uniforms(sa, f32(lw), f32(lh))
+			saved = make([]rl.Shader, mdl.materialCount, context.temp_allocator)
+			for i in 0 ..< mdl.materialCount {
+				saved[i] = mdl.materials[i].shader
+				mdl.materials[i].shader = sa.shader
+			}
+		}
 		rl.DrawModelEx(mdl, ent.pos, {0, 1, 0}, 0, ent.scale, ent.tint)
+		if shaded {
+			for i in 0 ..< mdl.materialCount {
+				mdl.materials[i].shader = saved[i]
+			}
+		}
 	}
 }
 
@@ -108,6 +176,15 @@ draw_entities_2d :: proc(e: ^Engine) {
 // Positions are entity centers (labels: top-left), so rotation and scaling
 // behave intuitively.
 draw_entity_2d :: proc(e: ^Engine, ent: ^Entity) {
+	// Per-entity shader: forces a batch flush per shaded entity (fine for
+	// dozens, not thousands). Also applies in the editor's 2D view — the
+	// editor bypass only disables the post chain.
+	sa, shaded := get_shader(e, ent.shader)
+	if shaded {
+		lw, lh := logical_size(e)
+		shader_set_auto_uniforms(sa, f32(lw), f32(lh))
+		rl.BeginShaderMode(sa.shader)
+	}
 	#partial switch v in ent.variant {
 	case Sprite:
 		tex := get_texture(e, v.texture)
@@ -129,5 +206,8 @@ draw_entity_2d :: proc(e: ^Engine, ent: ^Entity) {
 		text := strings.clone_to_cstring(v.text, context.temp_allocator)
 		rl.DrawTextPro(rl.GetFontDefault(), text, {ent.pos.x, ent.pos.y}, {}, ent.rot.z,
 			v.size * ent.scale.y, v.size / 10, ent.tint)
+	}
+	if shaded {
+		rl.EndShaderMode()
 	}
 }

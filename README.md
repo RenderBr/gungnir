@@ -1,6 +1,6 @@
-# odin-engine
+# Gungnir Engine
 
-A small game engine written in [Odin](https://odin-lang.org) on top of raylib:
+A small game engine written in [Odin](https://odin-lang.org) on top of raylib — named for Odin's spear:
 
 - **Lua scripting** with a dead-simple API — a playable game in ~30 lines
 - **2D and 3D in one scene** — sprites, shapes, text, meshes; 2D HUD over a 3D world for free

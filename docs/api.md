@@ -34,6 +34,47 @@ Colors are 0–255 RGB(A); hex colors are `"#rrggbb"` or `"#rrggbbaa"` strings.
 | `set_flip(id, flip_x, flip_y)` | sprites only |
 | `set_texture(id, name)` | sprites only; swap texture (animation frames) |
 
+## GameObjects (optional layer)
+
+A Unity-style layer over the entity API, written in pure Lua. Fully opt-in:
+the flat functions above keep working, and the two mix freely (`obj.id` is
+the raw entity id, `GameObject.wrap(id)` adopts an existing entity).
+
+| Constructor / static | Notes |
+|---|---|
+| `GameObject{name=, sprite=, x=, y=, ...} -> obj` | visual forms: `sprite="tex"`, `shape="rect"/"circle"` (`w=`, `h=`), `text="str"` (`size=`), `mesh="model"` (`z=`); no visual key = 16x16 rect. Extra opts: `z`, `rot`, `scale`, `tint={r,g,b[,a]}`, `tag` |
+| `GameObject("name")` | name-only shorthand (placeholder rect) |
+| `GameObject.wrap(id) -> obj or nil` | adopt an existing entity; its current rotation is assumed 0 |
+| `GameObject.find(name) -> obj or nil` | first live object with that name |
+| `GameObject.all() -> {obj, ...}` | |
+| `GameObject.with_tag(tag) -> {obj, ...}` | |
+
+| Method | Notes |
+|---|---|
+| `obj:pos() -> x, y, z` | |
+| `obj:set_pos(x, y [, z])` / `obj:move(dx, dy [, dz])` | |
+| `obj:rotate(deg)` | relative; rotation is tracked Lua-side — do not mix with flat `set_rot` on the same entity |
+| `obj:set_scale(s)` / `obj:tint(r, g, b [, a])` | |
+| `obj:destroy()` | destroys children too; pruned from the registry at end of frame |
+| `obj:alive() -> bool` | |
+| `obj:set_parent(other_or_nil)` | keeps current world offset; see parenting below |
+| `obj:tag(t)` / `obj:untag(t)` / `obj:has_tag(t)` | |
+| `obj:add_component{start=, update=, on_destroy=} -> comp` | `comp:remove()` detaches it |
+
+Properties: `obj.x`, `obj.y`, `obj.z`, `obj.name` read/write; `obj.id` read.
+Any other field is yours (`obj.vx = 5`). Setters return `obj` for chaining.
+Every method is safe after the entity is despawned — no-op, never an error.
+
+Components: `start(self, go)` runs once, right before the first
+`update(self, go, dt)`; updates run every frame after your `on_update(dt)`.
+`on_destroy(self, go)` fires exactly once — on `obj:destroy()`,
+`comp:remove()`, or when the entity dies externally (`despawn`,
+`clear_scene`, `load_level`; pruned at end of frame).
+
+Parenting: children follow the parent's position and z-rotation each frame
+(2D simplification — parent x/y euler rotation does not propagate). Moving
+or rotating a parented child re-bases its local offset, Unity-style.
+
 ## Drawing (immediate)
 
 `set_color(r, g, b [, a])` sets the color used by the shape/text calls below.
@@ -56,6 +97,20 @@ Colors are 0–255 RGB(A); hex colors are `"#rrggbb"` or `"#rrggbbaa"` strings.
 | `set_camera(x, y [, zoom, rot])` | centers the 2D camera on x,y |
 | `set_camera_3d(px, py, pz, tx, ty, tz [, fov])` | position + look-at target |
 | `screen_size() -> w, h` | |
+
+## Lighting
+
+Lights are entities: move them with `set_pos`, color them with `set_tint`,
+name/save them like anything else (the editor has a "+ light" button).
+The 2D world (and any 3D beneath it) is multiplied by ambient + lights;
+`on_gui` is never darkened. 3D models get per-pixel Lambert shading.
+
+| Function | Notes |
+|---|---|
+| `set_lighting(on)` | enables the lighting system (off by default) |
+| `set_ambient(r, g, b)` | base light level (default 60, 60, 75) |
+| `spawn_light(x, y [, z]) -> id` | point light; default radius 160, intensity 1 |
+| `set_light(id, radius [, intensity])` | radius in world units; intensity 0–4 |
 
 ## Input
 
@@ -80,6 +135,7 @@ by name everywhere a file asset would be, and saved into levels as recipes.
 | `gen_sound(name [, opts])` | opts: `wave` (`"sine"`, `"square"`, `"saw"`, `"triangle"`, `"noise"`), `freq`, `slide`, `len`, `attack`, `vol`, `seed` |
 | `gen_mesh(name, kind [, a, b, c])` | `"cube"` (w,h,d), `"sphere"` (r), `"plane"` (w,d), `"cylinder"` (r,h) |
 | `gen_mesh_terrain(name, cells_w, cells_d [, opts])` | opts: `seed`, `cell`, `height`, `scale`, `ridged`, `colors` |
+| `gen_shader(name, code) -> ok` | compile a GLSL 330 fragment shader; `false` + console log on compile error (previous version kept) |
 | `noise(x, y [, z]) -> -1..1` | OpenSimplex2, seeded by `srand` |
 | `srand(seed)` / `rand([a [, b]])` | `rand()` → [0,1), `rand(a)` → [0,a), `rand(a,b)` → [a,b) |
 
@@ -93,6 +149,58 @@ by name everywhere a file asset would be, and saved into levels as recipes.
 | `play_sound(name [, volume, pitch])` | |
 | `set_clear_color(r, g, b)` | background |
 | `set_crt(on)` | arcade CRT filter: curvature, scanlines, grille, glow; renders at 960x600 and upscales |
+| `set_entity_shader(id, name)` | draw this entity through a custom shader; `nil`/`""` restores default |
+| `set_screen_shader(name)` | full-screen shader over the game image (960x600 canvas); runs before the CRT filter; `nil` clears |
+| `set_shader_param(shader, param, x [,y,z,w])` | set a uniform: 1 number = float, 2 = vec2, 3 = vec3, 4 = vec4 |
 | `set_fullscreen(on)` | borderless fullscreen |
 | `log(...)` | print to console |
 | `quit()` | |
+
+## Custom shaders
+
+`gen_shader` compiles a full GLSL 330 fragment shader against raylib's default
+vertex shader. The boilerplate contract:
+
+- inputs: `in vec2 fragTexCoord;` and `in vec4 fragColor;`
+- uniforms: `uniform sampler2D texture0;` and `uniform vec4 colDiffuse;`
+- output: `out vec4 finalColor;`
+- auto-fed each frame when declared: `uniform float time;` (seconds) and
+  `uniform vec2 resolution;` (the canvas the shader's output is measured in)
+- other uniforms read as 0 until `set_shader_param` sets them; setting a
+  uniform the compiler stripped is a silent no-op
+- per-entity shaders force a batch flush per shaded entity — fine for dozens
+  of entities, not thousands
+- shapes draw from a small white texture, so `texture0` samples ~white and
+  `fragTexCoord` is ~constant — color/time effects work, UV gradients don't
+- text samples the font atlas: UVs are atlas-space, alpha comes from the glyph
+
+```lua
+-- color-cycle shader: hue-shifts whatever it draws over time
+gen_shader("cycle", [[
+#version 330
+in vec2 fragTexCoord;
+in vec4 fragColor;
+uniform sampler2D texture0;
+uniform vec4 colDiffuse;
+uniform float time;
+uniform float speed;
+out vec4 finalColor;
+void main() {
+    vec4 c = texture(texture0, fragTexCoord) * colDiffuse * fragColor;
+    float a = time * speed;
+    vec3 shift = vec3(0.5 + 0.5*sin(a),
+                      0.5 + 0.5*sin(a + 2.094),
+                      0.5 + 0.5*sin(a + 4.188));
+    finalColor = vec4(c.rgb * shift, c.a);
+}
+]])
+
+function on_init()
+  set_shader_param("cycle", "speed", 2.0)
+  gen_sprite("ship", 16, 16, 42)
+  ship = spawn_sprite("ship", 480, 300)
+  set_scale(ship, 6)
+  set_entity_shader(ship, "cycle")   -- per-entity
+  -- set_screen_shader("cycle")      -- or whole screen; composes with set_crt(true)
+end
+```

@@ -244,6 +244,9 @@ entity_bounds :: proc(e: ^engine.Engine, ent: ^engine.Entity) -> rl.Rectangle {
 		w := f32(rl.MeasureText(text, i32(v.size)))
 		return {ent.pos.x, ent.pos.y, max(w, 20), v.size}
 	case engine.MeshRef:
+	case engine.Light:
+		// small gizmo box — never the radius, or lights would swallow picking
+		return {ent.pos.x - 12, ent.pos.y - 12, 24, 24}
 	}
 	return {ent.pos.x - 8, ent.pos.y - 8, 16, 16}
 }
@@ -251,6 +254,21 @@ entity_bounds :: proc(e: ^engine.Engine, ent: ^engine.Entity) -> rl.Rectangle {
 // Grid, origin axes, and the selection outline. Runs inside the 2D pass.
 draw_world :: proc(ed: ^Editor, e: ^engine.Engine) {
 	draw_grid_2d(ed)
+	for &ent in e.scene.entities {
+		if !ent.alive {
+			continue
+		}
+		l, is_light := ent.variant.(engine.Light)
+		if !is_light {
+			continue
+		}
+		c := ent.tint
+		c.a = 255
+		rl.DrawCircleV({ent.pos.x, ent.pos.y}, 6 / ed.cam.zoom, c)
+		if l.kind == .Point {
+			rl.DrawCircleLinesV({ent.pos.x, ent.pos.y}, l.radius, {c.r, c.g, c.b, 90})
+		}
+	}
 	if ent := engine.get(&e.scene, ed.selected); ent != nil {
 		b := entity_bounds(e, ent)
 		rl.DrawRectangleLinesEx({b.x - 2, b.y - 2, b.width + 4, b.height + 4}, 1.5 / ed.cam.zoom, rl.GOLD)

@@ -31,11 +31,26 @@ Label :: struct {
 	size: f32,
 }
 
+LightKind :: enum {
+	Point,
+	Directional,
+}
+
+// Color comes from Entity.tint, position from Entity.pos. Directional lights
+// aim Entity.rot (euler degrees) applied to the default down vector {0,-1,0};
+// in 2D a directional light is a uniform additive wash.
+Light :: struct {
+	kind:      LightKind,
+	radius:    f32, // point falloff radius in world units (zero light at rim)
+	intensity: f32, // multiplier; 2D clamps to 0..4
+}
+
 Variant :: union {
 	Sprite,
 	MeshRef,
 	Shape,
 	Label,
+	Light,
 }
 
 Entity :: struct {
@@ -46,6 +61,7 @@ Entity :: struct {
 	rot:     rl.Vector3, // euler degrees; 2D uses only z
 	scale:   rl.Vector3,
 	tint:    rl.Color,
+	shader:  string, // owned; "" = default pipeline; key into assets.shaders
 	variant: Variant,
 }
 
@@ -70,6 +86,7 @@ entity_defaults :: proc() -> Entity {
 entity_clone :: proc(ent: Entity) -> Entity {
 	cloned := ent
 	cloned.name = strings.clone(ent.name)
+	cloned.shader = strings.clone(ent.shader)
 	switch v in ent.variant {
 	case Sprite:
 		s := v
@@ -84,6 +101,7 @@ entity_clone :: proc(ent: Entity) -> Entity {
 		l.text = strings.clone(v.text)
 		cloned.variant = l
 	case Shape:
+	case Light:
 	}
 	return cloned
 }
@@ -91,6 +109,8 @@ entity_clone :: proc(ent: Entity) -> Entity {
 entity_free :: proc(ent: ^Entity) {
 	delete(ent.name)
 	ent.name = ""
+	delete(ent.shader)
+	ent.shader = ""
 	switch &v in ent.variant {
 	case Sprite:
 		delete(v.texture)
@@ -99,6 +119,7 @@ entity_free :: proc(ent: ^Entity) {
 	case Label:
 		delete(v.text)
 	case Shape:
+	case Light:
 	}
 	ent.variant = nil
 }

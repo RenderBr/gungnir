@@ -4,6 +4,7 @@ import "core:fmt"
 import "core:os"
 import "core:strings"
 import rl "vendor:raylib"
+import rlgl "vendor:raylib/rlgl"
 
 // Generated and file-based assets share one registry, so scripts, level
 // files, and the editor reference everything by plain name. Lookup falls
@@ -12,8 +13,26 @@ Assets :: struct {
 	textures: map[string]rl.Texture2D,
 	sounds:   map[string]rl.Sound,
 	models:   map[string]rl.Model,
+	shaders:  map[string]ShaderAsset,
 	recipes:  map[string]GenRecipe, // keyed by recipe.name (map owns via recipe)
 	missing:  rl.Texture2D, // magenta checker placeholder
+}
+
+// Compiled fragment shader + cached uniform locations. 'time'/'resolution'
+// are auto-fed each frame the shader is used; other locs cache lazily.
+ShaderAsset :: struct {
+	shader:   rl.Shader,
+	time_loc: i32,
+	res_loc:  i32,
+	locs:     map[string]i32, // owned keys; -1 entries cache misses too
+}
+
+shader_asset_free :: proc(sa: ^ShaderAsset) {
+	rl.UnloadShader(sa.shader)
+	for key in sa.locs {
+		delete(key)
+	}
+	delete(sa.locs)
 }
 
 assets_init :: proc(a: ^Assets) {
@@ -35,6 +54,11 @@ assets_destroy :: proc(a: ^Assets) {
 		rl.UnloadModel(mdl)
 		delete(name)
 	}
+	for name, &sa in a.shaders {
+		shader_asset_free(&sa)
+		delete(name)
+	}
+	delete(a.shaders)
 	for _, &recipe in a.recipes {
 		recipe_free(&recipe)
 	}
@@ -111,4 +135,99 @@ get_model :: proc(e: ^Engine, name: string) -> (rl.Model, bool) {
 		return mdl, true
 	}
 	return {}, false
+}
+
+// Compiles fs_code with raylib's default vertex shader. On compile failure
+// the previous registration (if any) is kept, so hot reload of a broken
+// shader doesn't black out the game.
+register_shader :: proc(e: ^Engine, name: string, fs_code: string) -> bool {
+	ccode := strings.clone_to_cstring(fs_code, context.temp_allocator)
+	sh := rl.LoadShaderFromMemory(nil, ccode)
+	// raylib falls back to the default shader on compile failure, which
+	// still passes IsShaderValid — the id check is the real test.
+	if !rl.IsShaderValid(sh) || sh.id == u32(rlgl.GetShaderIdDefault()) {
+		if sh.locs != nil {
+			rl.MemFree(sh.locs) // UnloadShader refuses default-id shaders
+		}
+		fmt.eprintfln("[shader error] %q failed to compile (GLSL log above)", name)
+		return false
+	}
+	sa := ShaderAsset{
+		shader   = sh,
+		time_loc = i32(rl.GetShaderLocation(sh, "time")),
+		res_loc  = i32(rl.GetShaderLocation(sh, "resolution")),
+	}
+	if old, ok := &e.assets.shaders[name]; ok {
+		shader_asset_free(old)
+		e.assets.shaders[name] = sa
+	} else {
+		e.assets.shaders[strings.clone(name)] = sa
+	}
+	return true
+}
+
+// "" is the common fast path (default pipeline). Pointer return: callers may
+// mutate the locs cache; map slots are stable until the next insertion, and
+// no caller holds the pointer across a register_shader.
+get_shader :: proc(e: ^Engine, name: string) -> (^ShaderAsset, bool) {
+	if name == "" {
+		return nil, false
+	}
+	if sa, ok := &e.assets.shaders[name]; ok {
+		return sa, true
+	}
+	return nil, false
+}
+
+has_shader :: proc(e: ^Engine, name: string) -> bool {
+	return name in e.assets.shaders
+}
+
+// Not script-exposed; exists for registry symmetry and future editor use.
+unload_shader :: proc(e: ^Engine, name: string) {
+	if sa, ok := &e.assets.shaders[name]; ok {
+		shader_asset_free(sa)
+		dkey, _ := delete_key(&e.assets.shaders, name)
+		delete(dkey)
+	}
+}
+
+// Feed the conventional auto-uniforms right before a shader is used.
+// w,h = resolution the shader's output is measured in.
+shader_set_auto_uniforms :: proc(sa: ^ShaderAsset, w, h: f32) {
+	if sa.time_loc >= 0 {
+		t := f32(rl.GetTime())
+		rl.SetShaderValue(sa.shader, rl.ShaderLocationIndex(sa.time_loc), &t, .FLOAT)
+	}
+	if sa.res_loc >= 0 {
+		res := [2]f32{w, h}
+		rl.SetShaderValue(sa.shader, rl.ShaderLocationIndex(sa.res_loc), &res, .VEC2)
+	}
+}
+
+// 1..4 floats -> float/vec2/vec3/vec4. false = unknown shader name.
+// loc -1 (uniform absent/optimized out) is a silent no-op by design.
+set_shader_param :: proc(e: ^Engine, shader_name, param: string, vals: []f32) -> bool {
+	sa, ok := get_shader(e, shader_name)
+	if !ok {
+		return false
+	}
+	loc, cached := sa.locs[param]
+	if !cached {
+		cparam := strings.clone_to_cstring(param, context.temp_allocator)
+		loc = i32(rl.GetShaderLocation(sa.shader, cparam))
+		sa.locs[strings.clone(param)] = loc
+	}
+	if loc < 0 {
+		return true
+	}
+	kind: rl.ShaderUniformDataType
+	switch len(vals) {
+	case 1: kind = .FLOAT
+	case 2: kind = .VEC2
+	case 3: kind = .VEC3
+	case:   kind = .VEC4
+	}
+	rl.SetShaderValue(sa.shader, rl.ShaderLocationIndex(loc), raw_data(vals), kind)
+	return true
 }

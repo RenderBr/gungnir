@@ -33,7 +33,7 @@ main :: proc() {
 
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
 	rl.SetTraceLogLevel(.WARNING)
-	rl.InitWindow(960, 600, "odin-engine")
+	rl.InitWindow(960, 600, "Gungnir Engine")
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
 	rl.SetExitKey(.KEY_NULL) // esc belongs to games, not the window
@@ -77,6 +77,7 @@ main :: proc() {
 			script.call_update(&scr, dt)
 		}
 
+		engine.lighting_render_lightmap(&eng, editing ? ed.cam : eng.cam2d)
 		engine.begin_frame(&eng)
 		if editing && ed.view_3d {
 			rl.BeginMode3D(editor.orbit_camera(ed.orbit))
@@ -103,6 +104,7 @@ main :: proc() {
 			editor.draw_world(&ed, &eng)
 		}
 		engine.end_2d(&eng)
+		engine.lighting_composite_2d(&eng)
 
 		if running {
 			script.call_gui(&scr)

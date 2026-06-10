@@ -1,6 +1,7 @@
 package script
 
 import "core:c"
+import "core:fmt"
 import lua "vendor:lua/5.4"
 
 // Convention for every l_* CFunction:
@@ -25,6 +26,14 @@ register_api :: proc(L: ^lua.State) {
 	// Lua-side bootstrap for trivial aliases.
 	bootstrap :: `log = print`
 	lua.L_dostring(L, bootstrap)
+
+	// GameObject prelude (prelude.odin). On failure __gungnir_update is
+	// absent and call_update falls back to plain on_update, so the flat
+	// API keeps working; the error is engine-side, surface it loudly.
+	if lua.L_dostring(L, GAMEOBJECT_PRELUDE) != 0 {
+		fmt.eprintln("[script error] gameobject prelude:", lua.tostring(L, -1))
+		lua.pop(L, 1)
+	}
 }
 
 // -- shared argument helpers ------------------------------------------------
