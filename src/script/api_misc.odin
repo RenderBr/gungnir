@@ -1,6 +1,7 @@
 package script
 
 import "core:c"
+import "core:fmt"
 import "core:math/rand"
 import lua "vendor:lua/5.4"
 import rl "vendor:raylib"
@@ -12,6 +13,28 @@ register_misc :: proc(L: ^lua.State) {
 	reg(L, "quit", l_quit)
 	reg(L, "play_sound", l_play_sound)
 	reg(L, "clear_scene", l_clear_scene)
+	reg(L, "load_level", l_load_level)
+	reg(L, "save_level", l_save_level)
+}
+
+// save_level([name]) — writes the current scene + recipes to <game_dir>/<name>.json
+l_save_level :: proc "c" (L: ^lua.State) -> c.int {
+	name := lua.L_optstring(L, 1, "level")
+	context = g_ctx
+	path := fmt.tprintf("%s/%s.json", g_eng.game_dir, string(name))
+	ok := engine.save_level(g_eng, path)
+	lua.pushboolean(L, b32(ok))
+	return 1
+}
+
+// load_level(name) — loads <game_dir>/<name>.json, replacing the scene.
+l_load_level :: proc "c" (L: ^lua.State) -> c.int {
+	name := lua.L_checkstring(L, 1)
+	context = g_ctx
+	path := fmt.tprintf("%s/%s.json", g_eng.game_dir, string(name))
+	ok := engine.load_level(g_eng, path)
+	lua.pushboolean(L, b32(ok))
+	return 1
 }
 
 // play_sound(name [, volume, pitch])

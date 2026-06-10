@@ -28,11 +28,16 @@ Script :: struct {
 	toast_timer: f32,
 }
 
-init :: proc(s: ^Script, eng: ^engine.Engine, main_path: string) -> bool {
+// start=false defers the first script run (editor mode starts paused; the
+// state is created on Play).
+init :: proc(s: ^Script, eng: ^engine.Engine, main_path: string, start := true) -> bool {
 	g_eng = eng
 	g_ctx = context
 	s.main_path = strings.clone(main_path)
 	s.last_mtime, _ = os.last_write_time_by_name(s.main_path)
+	if !start {
+		return true
+	}
 	return start_state(s)
 }
 
@@ -43,6 +48,12 @@ destroy :: proc(s: ^Script) {
 	}
 	delete(s.main_path)
 	delete(s.last_error)
+}
+
+// Fresh lua state + run file + on_init, leaving the scene as the caller
+// prepared it. The editor uses this for Play (scene already authored).
+play_start :: proc(s: ^Script) -> bool {
+	return start_state(s)
 }
 
 // Fresh state + run file + on_init. Used at startup and for full restarts.
@@ -64,7 +75,6 @@ start_state :: proc(s: ^Script) -> bool {
 
 	register_api(s.L)
 	s.broken = false
-	engine.clear_scene(&g_eng.scene) // restart = fresh scene + fresh state
 
 	if !run_main_file(s) {
 		return false
@@ -72,7 +82,10 @@ start_state :: proc(s: ^Script) -> bool {
 	return call_callback(s, "on_init")
 }
 
+// Full restart: fresh scene, re-loaded level (if any), fresh lua state.
 restart :: proc(s: ^Script) {
+	engine.clear_scene(&g_eng.scene)
+	engine.load_default_level(g_eng)
 	if start_state(s) {
 		set_toast(s, "restarted")
 	}
@@ -106,7 +119,7 @@ soft_reload :: proc(s: ^Script) {
 tick_hot_reload :: proc(s: ^Script, dt: f32) {
 	s.toast_timer = max(0, s.toast_timer - dt)
 	s.poll_timer += dt
-	if s.poll_timer < RELOAD_POLL_INTERVAL {
+	if s.L == nil || s.poll_timer < RELOAD_POLL_INTERVAL {
 		return
 	}
 	s.poll_timer = 0

@@ -5,15 +5,19 @@ import "core:os"
 import "core:path/filepath"
 import "core:strings"
 import rl "vendor:raylib"
+import "editor"
 import "engine"
 import "script"
 
 main :: proc() {
 	game_dir := "examples/hello"
 	shot_path: string // dev flag: screenshot after ~1s, then exit
+	editor_flag := false
 	for arg in os.args[1:] {
 		if strings.has_prefix(arg, "--shot=") {
 			shot_path = strings.trim_prefix(arg, "--shot=")
+		} else if arg == "--editor" {
+			editor_flag = true
 		} else if !strings.has_prefix(arg, "-") {
 			game_dir = arg
 		}
@@ -37,32 +41,64 @@ main :: proc() {
 	engine.init(&eng, game_dir)
 	defer engine.destroy(&eng)
 
+	engine.load_default_level(&eng)
+
 	scr: script.Script
-	script.init(&scr, &eng, main_lua)
+	script.init(&scr, &eng, main_lua, start = !editor_flag)
 	defer script.destroy(&scr)
+
+	ed: editor.Editor
+	editor.init(&ed, editor_flag)
+	defer editor.destroy(&ed)
 
 	frame := 0
 	for !rl.WindowShouldClose() && !eng.should_quit {
 		frame += 1
 		dt := min(rl.GetFrameTime(), 0.1)
+		editing := ed.enabled && !ed.playing
+		running := !editing
 
-		script.tick_hot_reload(&scr, dt)
-		if restart_requested() {
-			script.restart(&scr)
+		if editing {
+			editor.update(&ed, &eng, dt)
+		} else {
+			script.tick_hot_reload(&scr, dt)
+			if restart_requested() {
+				script.restart(&scr)
+			}
+			if !ed.enabled && rl.IsKeyPressed(.F1) {
+				ed.enabled = true // editor over a running game; Stop pauses it
+				ed.playing = true
+			}
+			script.call_update(&scr, dt)
 		}
-
-		script.call_update(&scr, dt)
 
 		engine.begin_frame(&eng)
 		engine.begin_3d(&eng)
 		engine.draw_entities_3d(&eng)
-		script.call_draw_3d(&scr)
+		if running {
+			script.call_draw_3d(&scr)
+		}
 		engine.end_3d(&eng)
-		engine.begin_2d(&eng)
+
+		if editing {
+			rl.BeginMode2D(ed.cam)
+		} else {
+			engine.begin_2d(&eng)
+		}
 		engine.draw_entities_2d(&eng)
-		script.call_draw(&scr)
+		if running {
+			script.call_draw(&scr)
+		} else {
+			editor.draw_world(&ed, &eng)
+		}
 		engine.end_2d(&eng)
-		script.call_gui(&scr)
+
+		if running {
+			script.call_gui(&scr)
+		}
+		if ed.enabled {
+			editor.draw_panels(&ed, &eng, &scr)
+		}
 		draw_overlay(&scr)
 		engine.end_frame(&eng)
 

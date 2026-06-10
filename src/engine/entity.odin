@@ -66,6 +66,28 @@ entity_defaults :: proc() -> Entity {
 	return {scale = {1, 1, 1}, tint = rl.WHITE}
 }
 
+// Deep copy: clones owned strings. Used by editor snapshots and duplicate.
+entity_clone :: proc(ent: Entity) -> Entity {
+	cloned := ent
+	cloned.name = strings.clone(ent.name)
+	switch v in ent.variant {
+	case Sprite:
+		s := v
+		s.texture = strings.clone(v.texture)
+		cloned.variant = s
+	case MeshRef:
+		m := v
+		m.model = strings.clone(v.model)
+		cloned.variant = m
+	case Label:
+		l := v
+		l.text = strings.clone(v.text)
+		cloned.variant = l
+	case Shape:
+	}
+	return cloned
+}
+
 entity_free :: proc(ent: ^Entity) {
 	delete(ent.name)
 	ent.name = ""
