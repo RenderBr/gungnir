@@ -15,6 +15,8 @@ register_gen :: proc(L: ^lua.State) {
 	reg(L, "gen_sprite", l_gen_sprite)
 	reg(L, "gen_sound", l_gen_sound)
 	reg(L, "gen_palette", l_gen_palette)
+	reg(L, "gen_mesh_terrain", l_gen_mesh_terrain)
+	reg(L, "gen_mesh", l_gen_mesh)
 	reg(L, "noise", l_noise)
 }
 
@@ -182,6 +184,56 @@ l_gen_palette :: proc "c" (L: ^lua.State) -> c.int {
 	}
 	free_all(context.temp_allocator)
 	return 1
+}
+
+// gen_mesh_terrain(name, cells_w, cells_d [, opts])
+// opts: seed, cell, height, scale, ridged (bool-ish), colors (hex array)
+l_gen_mesh_terrain :: proc "c" (L: ^lua.State) -> c.int {
+	name := lua.L_checkstring(L, 1)
+	w := i32(lua.L_checkinteger(L, 2))
+	d := i32(lua.L_checkinteger(L, 3))
+	has_opts := b32(lua.istable(L, 4))
+	context = g_ctx
+
+	r: engine.GenRecipe
+	r.name = strings.clone(string(name))
+	r.kind = strings.clone("terrain")
+	r.variant = strings.clone("")
+	r.w, r.h = w, d
+	if has_opts {
+		r.seed = i64(tbl_f64(L, 4, "seed", 0))
+		for key in ([]cstring{"cell", "height", "scale", "ridged"}) {
+			if v := tbl_f64(L, 4, key, max(f64)); v != max(f64) {
+				r.params[strings.clone(string(key))] = v
+			}
+		}
+		lua.getfield(L, 4, "colors")
+		read_palette(L, lua.gettop(L), &r.colors)
+		lua.pop(L, 1)
+	}
+	engine.apply_recipe(g_eng, r)
+	return 0
+}
+
+// gen_mesh(name, kind [, a, b, c])  kind: "cube"|"sphere"|"plane"|"cylinder"
+// cube: a,b,c = w,h,d | sphere: a = radius | plane: a,b | cylinder: a=r, b=h
+l_gen_mesh :: proc "c" (L: ^lua.State) -> c.int {
+	name := lua.L_checkstring(L, 1)
+	kind := lua.L_checkstring(L, 2)
+	a := f64(lua.L_optnumber(L, 3, 1))
+	b := f64(lua.L_optnumber(L, 4, 1))
+	cc := f64(lua.L_optnumber(L, 5, 1))
+	context = g_ctx
+
+	r: engine.GenRecipe
+	r.name = strings.clone(string(name))
+	r.kind = strings.clone("mesh")
+	r.variant = strings.clone(string(kind))
+	r.params[strings.clone("a")] = a
+	r.params[strings.clone("b")] = b
+	r.params[strings.clone("c")] = cc
+	engine.apply_recipe(g_eng, r)
+	return 0
 }
 
 // noise(x, y [, z]) -> [-1, 1], seeded by srand()

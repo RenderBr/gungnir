@@ -33,6 +33,28 @@ end_3d :: proc(e: ^Engine) {
 	rl.EndMode3D()
 }
 
+// Draws all alive MeshRef entities. Call between begin_3d and end_3d.
+draw_entities_3d :: proc(e: ^Engine) {
+	for &ent in e.scene.entities {
+		if !ent.alive {
+			continue
+		}
+		mref, is_mesh := ent.variant.(MeshRef)
+		if !is_mesh {
+			continue
+		}
+		mdl, ok := get_model(e, mref.model)
+		if !ok {
+			continue
+		}
+		// Shallow copy so the per-entity euler rotation doesn't stick.
+		mdl.transform = rl.MatrixRotateXYZ(
+			{ent.rot.x * rl.DEG2RAD, ent.rot.y * rl.DEG2RAD, ent.rot.z * rl.DEG2RAD},
+		)
+		rl.DrawModelEx(mdl, ent.pos, {0, 1, 0}, 0, ent.scale, ent.tint)
+	}
+}
+
 // Draws all alive 2D entities (Sprite/Shape/Label), back-to-front by pos.z.
 // Call between begin_2d and end_2d.
 draw_entities_2d :: proc(e: ^Engine) {

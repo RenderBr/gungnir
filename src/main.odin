@@ -55,6 +55,7 @@ main :: proc() {
 
 		engine.begin_frame(&eng)
 		engine.begin_3d(&eng)
+		engine.draw_entities_3d(&eng)
 		script.call_draw_3d(&scr)
 		engine.end_3d(&eng)
 		engine.begin_2d(&eng)

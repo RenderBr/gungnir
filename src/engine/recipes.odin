@@ -67,6 +67,31 @@ apply_recipe :: proc(e: ^Engine, r: GenRecipe) {
 		register_texture(e, r.name, rl.LoadTextureFromImage(img))
 		rl.UnloadImage(img)
 
+	case "terrain":
+		opts := gen.default_terrain_opts()
+		opts.seed = r.seed
+		opts.cells_w = int(r.w)
+		opts.cells_d = int(r.h)
+		opts.cell = f32(param(r, "cell", f64(opts.cell)))
+		opts.height = f32(param(r, "height", f64(opts.height)))
+		opts.scale = param(r, "scale", opts.scale)
+		opts.ridged = param(r, "ridged", 0) != 0
+		opts.colors = r.colors[:]
+		register_model(e, r.name, gen.gen_terrain_model(opts))
+
+	case "mesh":
+		kind: gen.MeshPrimitive
+		switch r.variant {
+		case "sphere":   kind = .Sphere
+		case "plane":    kind = .Plane
+		case "cylinder": kind = .Cylinder
+		case:            kind = .Cube
+		}
+		a := f32(param(r, "a", 1))
+		b := f32(param(r, "b", 1))
+		c := f32(param(r, "c", 1))
+		register_model(e, r.name, gen.gen_primitive_model(kind, a, b, c))
+
 	case "sound":
 		opts := gen.default_sound_opts()
 		opts.seed = u64(r.seed)

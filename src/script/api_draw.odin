@@ -14,7 +14,11 @@ register_draw :: proc(L: ^lua.State) {
 	reg(L, "draw_line", l_draw_line)
 	reg(L, "draw_text", l_draw_text)
 	reg(L, "set_camera", l_set_camera)
+	reg(L, "set_camera_3d", l_set_camera_3d)
 	reg(L, "screen_size", l_screen_size)
+	reg(L, "draw_cube", l_draw_cube)
+	reg(L, "draw_sphere", l_draw_sphere)
+	reg(L, "draw_grid", l_draw_grid)
 }
 
 l_set_color :: proc "c" (L: ^lua.State) -> c.int {
@@ -99,6 +103,50 @@ l_set_camera :: proc "c" (L: ^lua.State) -> c.int {
 		zoom     = zoom,
 		rotation = rot,
 	}
+	return 0
+}
+
+// set_camera_3d(px, py, pz, tx, ty, tz [, fov])
+l_set_camera_3d :: proc "c" (L: ^lua.State) -> c.int {
+	px := arg_f32(L, 1)
+	py := arg_f32(L, 2)
+	pz := arg_f32(L, 3)
+	tx := arg_f32(L, 4)
+	ty := arg_f32(L, 5)
+	tz := arg_f32(L, 6)
+	fov := opt_f32(L, 7, 60)
+	g_eng.cam3d.position = {px, py, pz}
+	g_eng.cam3d.target = {tx, ty, tz}
+	g_eng.cam3d.fovy = fov
+	return 0
+}
+
+// draw_cube(x, y, z, w, h, d) — only valid inside on_draw_3d
+l_draw_cube :: proc "c" (L: ^lua.State) -> c.int {
+	x := arg_f32(L, 1)
+	y := arg_f32(L, 2)
+	z := arg_f32(L, 3)
+	w := arg_f32(L, 4)
+	h := arg_f32(L, 5)
+	d := arg_f32(L, 6)
+	rl.DrawCube({x, y, z}, w, h, d, g_eng.draw_color)
+	return 0
+}
+
+l_draw_sphere :: proc "c" (L: ^lua.State) -> c.int {
+	x := arg_f32(L, 1)
+	y := arg_f32(L, 2)
+	z := arg_f32(L, 3)
+	r := arg_f32(L, 4)
+	rl.DrawSphere({x, y, z}, r, g_eng.draw_color)
+	return 0
+}
+
+// draw_grid([slices, spacing]) — only valid inside on_draw_3d
+l_draw_grid :: proc "c" (L: ^lua.State) -> c.int {
+	slices := opt_f32(L, 1, 20)
+	spacing := opt_f32(L, 2, 1)
+	rl.DrawGrid(i32(slices), spacing)
 	return 0
 }
 

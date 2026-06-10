@@ -10,7 +10,8 @@
     "draw_cube", "draw_grid", "set_color", "set_clear_color",
     "key_down", "key_pressed", "mouse_pos", "mouse_down", "mouse_pressed", "mouse_wheel",
     "set_camera", "set_camera_3d", "screen_size",
-    "gen_texture", "gen_sprite", "gen_palette", "gen_mesh_terrain", "gen_sound",
+    "gen_texture", "gen_sprite", "gen_palette", "gen_mesh_terrain", "gen_mesh", "gen_sound",
+    "draw_sphere",
     "noise", "srand", "rand",
     "load_level", "clear_scene", "play_sound", "log", "quit"
   ]
