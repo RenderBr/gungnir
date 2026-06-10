@@ -61,6 +61,7 @@ main :: proc() {
 		dt := min(rl.GetFrameTime(), 0.1)
 		editing := ed.enabled && !ed.playing
 		running := !editing
+		eng.postfx.bypass = ed.enabled // CRT filter is for games, not the editor
 
 		if editing {
 			editor.update(&ed, &eng, dt)
@@ -109,7 +110,7 @@ main :: proc() {
 		if ed.enabled {
 			editor.draw_panels(&ed, &eng, &scr)
 		}
-		draw_overlay(&scr)
+		draw_overlay(&eng, &scr)
 		engine.end_frame(&eng)
 
 		if shot_path != "" && frame == 60 {
@@ -125,9 +126,9 @@ restart_requested :: proc() -> bool {
 }
 
 // Screen-space status layer: script error banner and reload toasts.
-draw_overlay :: proc(s: ^script.Script) {
+draw_overlay :: proc(e: ^engine.Engine, s: ^script.Script) {
 	if s.broken {
-		w := rl.GetScreenWidth()
+		w, _ := engine.logical_size(e)
 		rl.DrawRectangle(0, 0, w, 40, {180, 30, 30, 230})
 		rl.DrawText("script error (fix + save to reload, cmd+r to restart)", 12, 10, 20, rl.RAYWHITE)
 
@@ -137,7 +138,8 @@ draw_overlay :: proc(s: ^script.Script) {
 	}
 	if s.toast_timer > 0 {
 		msg := strings.clone_to_cstring(s.toast, context.temp_allocator)
-		rl.DrawText(msg, 12, rl.GetScreenHeight() - 28, 18, {140, 220, 140, 255})
+		_, h := engine.logical_size(e)
+		rl.DrawText(msg, 12, h - 28, 18, {140, 220, 140, 255})
 	}
 	free_all(context.temp_allocator)
 }

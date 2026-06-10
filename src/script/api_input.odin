@@ -29,7 +29,8 @@ l_key_pressed :: proc "c" (L: ^lua.State) -> c.int {
 }
 
 l_mouse_pos :: proc "c" (L: ^lua.State) -> c.int {
-	pos := rl.GetMousePosition()
+	context = g_ctx
+	pos := engine.mouse_logical(g_eng)
 	lua.pushnumber(L, lua.Number(pos.x))
 	lua.pushnumber(L, lua.Number(pos.y))
 	return 2

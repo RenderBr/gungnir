@@ -59,6 +59,8 @@ end
 
 function on_init()
   set_clear_color(0, 0, 0)
+  set_fullscreen(true)
+  set_crt(true)
 
   gen_sound("waka1", { wave = "triangle", freq = 420, slide = -260, len = 0.07, vol = 0.30 })
   gen_sound("waka2", { wave = "triangle", freq = 300, slide = 260, len = 0.07, vol = 0.30 })

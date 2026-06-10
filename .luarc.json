@@ -13,6 +13,7 @@
     "gen_texture", "gen_sprite", "gen_palette", "gen_mesh_terrain", "gen_mesh", "gen_sound",
     "draw_sphere",
     "noise", "srand", "rand",
-    "load_level", "clear_scene", "play_sound", "log", "quit"
+    "load_level", "save_level", "clear_scene", "play_sound", "log", "quit",
+    "set_crt", "set_fullscreen"
   ]
 }

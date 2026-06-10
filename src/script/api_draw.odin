@@ -97,9 +97,11 @@ l_set_camera :: proc "c" (L: ^lua.State) -> c.int {
 	y := arg_f32(L, 2)
 	zoom := opt_f32(L, 3, 1)
 	rot := opt_f32(L, 4, 0)
+	context = g_ctx
+	w, h := engine.logical_size(g_eng)
 	g_eng.cam2d = {
 		target   = {x, y},
-		offset   = {f32(rl.GetScreenWidth()) / 2, f32(rl.GetScreenHeight()) / 2},
+		offset   = {f32(w) / 2, f32(h) / 2},
 		zoom     = zoom,
 		rotation = rot,
 	}
@@ -151,7 +153,9 @@ l_draw_grid :: proc "c" (L: ^lua.State) -> c.int {
 }
 
 l_screen_size :: proc "c" (L: ^lua.State) -> c.int {
-	lua.pushnumber(L, lua.Number(rl.GetScreenWidth()))
-	lua.pushnumber(L, lua.Number(rl.GetScreenHeight()))
+	context = g_ctx
+	w, h := engine.logical_size(g_eng)
+	lua.pushnumber(L, lua.Number(w))
+	lua.pushnumber(L, lua.Number(h))
 	return 2
 }

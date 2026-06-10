@@ -11,6 +11,7 @@ Engine :: struct {
 	cam3d:       rl.Camera3D,
 	scene:       Scene,
 	assets:      Assets,
+	postfx:      Postfx,
 }
 
 // Requires an open window (textures need a GL context) and audio device.
@@ -32,4 +33,5 @@ init :: proc(e: ^Engine, game_dir: string) {
 destroy :: proc(e: ^Engine) {
 	scene_destroy(&e.scene)
 	assets_destroy(&e.assets)
+	postfx_destroy(e)
 }

@@ -90,5 +90,7 @@ by name everywhere a file asset would be, and saved into levels as recipes.
 | `clear_scene()` | |
 | `play_sound(name [, volume, pitch])` | |
 | `set_clear_color(r, g, b)` | background |
+| `set_crt(on)` | arcade CRT filter: curvature, scanlines, grille, glow; renders at 960x600 and upscales |
+| `set_fullscreen(on)` | borderless fullscreen |
 | `log(...)` | print to console |
 | `quit()` | |

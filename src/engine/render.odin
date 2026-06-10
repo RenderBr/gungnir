@@ -9,11 +9,40 @@ import rl "vendor:raylib"
 // artifacts. main.odin composes these; nothing else may open rl modes.
 
 begin_frame :: proc(e: ^Engine) {
-	rl.BeginDrawing()
+	if postfx_active(e) {
+		rl.BeginTextureMode(e.postfx.rt)
+	} else {
+		rl.BeginDrawing()
+	}
 	rl.ClearBackground(e.clear_color)
 }
 
 end_frame :: proc(e: ^Engine) {
+	if postfx_active(e) {
+		rl.EndTextureMode()
+		rl.BeginDrawing()
+		rl.ClearBackground(rl.BLACK)
+
+		t := f32(rl.GetTime())
+		rl.SetShaderValue(e.postfx.shader, rl.ShaderLocationIndex(e.postfx.time_loc), &t, .FLOAT)
+		res := [2]f32{f32(e.postfx.w), f32(e.postfx.h)}
+		rl.SetShaderValue(e.postfx.shader, rl.ShaderLocationIndex(e.postfx.res_loc), &res, .VEC2)
+
+		sw := f32(rl.GetScreenWidth())
+		sh := f32(rl.GetScreenHeight())
+		scale := min(sw / f32(e.postfx.w), sh / f32(e.postfx.h))
+		dw := f32(e.postfx.w) * scale
+		dh := f32(e.postfx.h) * scale
+
+		rl.BeginShaderMode(e.postfx.shader)
+		rl.DrawTexturePro(
+			e.postfx.rt.texture,
+			{0, 0, f32(e.postfx.w), -f32(e.postfx.h)}, // RT is vertically flipped
+			{(sw - dw) / 2, (sh - dh) / 2, dw, dh},
+			{}, 0, rl.WHITE,
+		)
+		rl.EndShaderMode()
+	}
 	rl.EndDrawing()
 }
 

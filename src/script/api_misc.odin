@@ -15,6 +15,27 @@ register_misc :: proc(L: ^lua.State) {
 	reg(L, "clear_scene", l_clear_scene)
 	reg(L, "load_level", l_load_level)
 	reg(L, "save_level", l_save_level)
+	reg(L, "set_crt", l_set_crt)
+	reg(L, "set_fullscreen", l_set_fullscreen)
+}
+
+// set_crt(on) — arcade CRT filter: curvature, scanlines, grille, glow.
+// The game renders at 960x600 and upscales, like a real cab.
+l_set_crt :: proc "c" (L: ^lua.State) -> c.int {
+	on := b32(lua.toboolean(L, 1))
+	context = g_ctx
+	engine.postfx_enable(g_eng, bool(on))
+	return 0
+}
+
+// set_fullscreen(on) — borderless fullscreen on the current monitor.
+l_set_fullscreen :: proc "c" (L: ^lua.State) -> c.int {
+	on := b32(lua.toboolean(L, 1))
+	context = g_ctx
+	if bool(on) != rl.IsWindowState({.BORDERLESS_WINDOWED_MODE}) {
+		rl.ToggleBorderlessWindowed()
+	}
+	return 0
 }
 
 // save_level([name]) — writes the current scene + recipes to <game_dir>/<name>.json
