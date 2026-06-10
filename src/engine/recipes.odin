@@ -7,12 +7,13 @@ import "../gen"
 // save recipes (seed + params), not pixels, and regenerate on load.
 GenRecipe :: struct {
 	name:    string, // owned
-	kind:    string, // owned: "texture" | "sprite" | "sound"
-	variant: string, // owned: texture kind ("noise"...) or wave name ("square"...)
+	kind:    string, // owned: "texture" | "sprite" | "sound" | "pixels" | ...
+	variant: string, // owned: texture kind / wave name / pixels charset
 	seed:    i64,
 	w, h:    i32,
 	params:  map[string]f64, // owned keys
 	colors:  [dynamic]rl.Color,
+	rows:    [dynamic]string, // owned; "pixels" art, chars index variant/colors
 }
 
 recipe_free :: proc(r: ^GenRecipe) {
@@ -24,6 +25,10 @@ recipe_free :: proc(r: ^GenRecipe) {
 	}
 	delete(r.params)
 	delete(r.colors)
+	for row in r.rows {
+		delete(row)
+	}
+	delete(r.rows)
 }
 
 @(private = "file")
@@ -71,6 +76,32 @@ generate_from_recipe :: proc(e: ^Engine, r: GenRecipe) {
 			palette = generated
 		}
 		img := gen.gen_sprite_image(r.w, r.h, u64(r.seed), palette)
+		register_texture(e, r.name, rl.LoadTextureFromImage(img))
+		rl.UnloadImage(img)
+
+	case "pixels":
+		// Hand-drawn pixel art: rows of chars, each char indexing a palette
+		// color via position in the charset string (variant). '.' and ' '
+		// are transparent.
+		img := rl.GenImageColor(r.w, r.h, rl.BLANK)
+		pixels := ([^]rl.Color)(img.data)
+		for row, y in r.rows {
+			if i32(y) >= r.h {
+				break
+			}
+			for x in 0 ..< min(len(row), int(r.w)) {
+				ch := row[x]
+				if ch == '.' || ch == ' ' {
+					continue
+				}
+				for vc, ci in transmute([]u8)r.variant {
+					if vc == ch && ci < len(r.colors) {
+						pixels[y * int(r.w) + x] = r.colors[ci]
+						break
+					}
+				}
+			}
+		}
 		register_texture(e, r.name, rl.LoadTextureFromImage(img))
 		rl.UnloadImage(img)
 

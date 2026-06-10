@@ -30,6 +30,7 @@ RecipeDTO :: struct {
 	w, h:    i32,
 	params:  map[string]f64,
 	colors:  []string,
+	rows:    []string,
 }
 
 LevelDTO :: struct {
@@ -62,7 +63,7 @@ save_level :: proc(e: ^Engine, path: string) -> bool {
 		append(&recipes, RecipeDTO{
 			name = r.name, kind = r.kind, variant = r.variant,
 			seed = r.seed, w = r.w, h = r.h,
-			params = r.params, colors = colors,
+			params = r.params, colors = colors, rows = r.rows[:],
 		})
 	}
 	dto.assets = recipes[:]
@@ -136,6 +137,9 @@ load_level :: proc(e: ^Engine, path: string) -> bool {
 		}
 		for hex in rd.colors {
 			append(&r.colors, gen.parse_hex_color(hex))
+		}
+		for row in rd.rows {
+			append(&r.rows, strings.clone(row))
 		}
 		apply_recipe(e, r)
 	}

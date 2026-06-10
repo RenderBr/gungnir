@@ -17,7 +17,55 @@ register_gen :: proc(L: ^lua.State) {
 	reg(L, "gen_palette", l_gen_palette)
 	reg(L, "gen_mesh_terrain", l_gen_mesh_terrain)
 	reg(L, "gen_mesh", l_gen_mesh)
+	reg(L, "gen_pixels", l_gen_pixels)
 	reg(L, "noise", l_noise)
+}
+
+// gen_pixels(name, rows, palette) — pixel-art texture from an array of row
+// strings; palette maps chars to hex colors, e.g. {r="#ff0000"}. '.' and ' '
+// are transparent. Width = longest row.
+l_gen_pixels :: proc "c" (L: ^lua.State) -> c.int {
+	name := lua.L_checkstring(L, 1)
+	if !b32(lua.istable(L, 2)) {
+		lua.L_error(L, "gen_pixels: rows must be a table of strings")
+	}
+	if !b32(lua.istable(L, 3)) {
+		lua.L_error(L, "gen_pixels: palette must be a table {char=\"#hex\"}")
+	}
+	context = g_ctx
+
+	r: engine.GenRecipe
+	r.name = strings.clone(string(name))
+	r.kind = strings.clone("pixels")
+
+	n := lua.Integer(lua.rawlen(L, 2))
+	for i in 1 ..= n {
+		lua.rawgeti(L, 2, i)
+		if b32(lua.isstring(L, -1)) {
+			row := strings.clone(string(lua.tostring(L, -1)))
+			append(&r.rows, row)
+			r.w = max(r.w, i32(len(row)))
+		}
+		lua.pop(L, 1)
+	}
+	r.h = i32(len(r.rows))
+
+	charset := strings.builder_make()
+	lua.pushnil(L)
+	for lua.next(L, 3) != 0 {
+		if b32(lua.isstring(L, -2)) && b32(lua.isstring(L, -1)) {
+			key := string(lua.tostring(L, -2))
+			if len(key) == 1 {
+				strings.write_byte(&charset, key[0])
+				append(&r.colors, gen.parse_hex_color(string(lua.tostring(L, -1))))
+			}
+		}
+		lua.pop(L, 1)
+	}
+	r.variant = strings.to_string(charset) // builder memory transfers
+
+	engine.apply_recipe(g_eng, r)
+	return 0
 }
 
 // -- option-table helpers ----------------------------------------------------

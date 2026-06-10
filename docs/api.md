@@ -32,6 +32,7 @@ Colors are 0–255 RGB(A); hex colors are `"#rrggbb"` or `"#rrggbbaa"` strings.
 | `set_name(id, name)` | |
 | `set_text(id, str)` | text entities only |
 | `set_flip(id, flip_x, flip_y)` | sprites only |
+| `set_texture(id, name)` | sprites only; swap texture (animation frames) |
 
 ## Drawing (immediate)
 
@@ -73,6 +74,7 @@ by name everywhere a file asset would be, and saved into levels as recipes.
 | Function | Notes |
 |---|---|
 | `gen_sprite(name, w, h, seed [, palette])` | mirrored pixel sprite; palette = array of hex strings |
+| `gen_pixels(name, rows, palette)` | hand-drawn pixel art: rows = array of strings, palette maps chars to hex (`{y="#ffff00"}`); `.` and space = transparent |
 | `gen_texture(name, w, h [, opts])` | opts: `kind` (`"noise"`, `"gradient"`, `"checker"`, `"circle"`), `seed`, `scale`, `cells`, `horizontal`, `color`, `color2` |
 | `gen_palette(n [, seed]) -> {hex, ...}` | |
 | `gen_sound(name [, opts])` | opts: `wave` (`"sine"`, `"square"`, `"saw"`, `"triangle"`, `"noise"`), `freq`, `slide`, `len`, `attack`, `vol`, `seed` |

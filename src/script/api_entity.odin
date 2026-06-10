@@ -21,6 +21,23 @@ register_entity :: proc(L: ^lua.State) {
 	reg(L, "set_name", l_set_name)
 	reg(L, "set_text", l_set_text)
 	reg(L, "set_flip", l_set_flip)
+	reg(L, "set_texture", l_set_texture)
+}
+
+// set_texture(id, name) — swap a sprite entity's texture (animation frames).
+l_set_texture :: proc "c" (L: ^lua.State) -> c.int {
+	ent := arg_entity(L, 1, "set_texture")
+	name := lua.L_checkstring(L, 2)
+	context = g_ctx
+	sprite, ok := &ent.variant.(engine.Sprite)
+	if !ok {
+		lua.L_error(L, "set_texture: entity is not a sprite")
+	}
+	if sprite.texture != string(name) {
+		delete(sprite.texture)
+		sprite.texture = strings.clone(string(name))
+	}
+	return 0
 }
 
 // Resolves an entity argument or raises a Lua error (caught by the pcall

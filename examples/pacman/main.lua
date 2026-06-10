@@ -44,6 +44,135 @@ EPS = 1e-4
 function px(x) return OX + x * T end
 function py(y) return OY + y * T end
 
+-- ------------------------------------------------- arcade sprites (14x14)
+-- Geometry from the original arcade sprite outlines (via shaunlebron/pacman):
+-- ghost head dome, two skirt frames, directional eyes, frightened face, and
+-- pacman's mouth wedge (hinged 3px behind center, half-angles atan(4/5) and
+-- atan(6/3)).
+
+GHOST_BODY_A = {
+  ".....####.....",
+  "...########...",
+  "..##########..",
+  ".############.",
+  ".############.",
+  "##############",
+  "##############",
+  "##############",
+  "##############",
+  "##############",
+  "##############",
+  "##############",
+  "##.###..###.##",
+  "#...##..##...#",
+}
+GHOST_BODY_B = {
+  ".....####.....",
+  "...########...",
+  "..##########..",
+  ".############.",
+  ".############.",
+  "##############",
+  "##############",
+  "##############",
+  "##############",
+  "##############",
+  "##############",
+  "##############",
+  "####.####.####",
+  ".##...##...##.",
+}
+
+local function new_grid()
+  local g = {}
+  for y = 1, 14 do g[y] = {} for x = 1, 14 do g[y][x] = "." end end
+  return g
+end
+
+local function grid_rows(g)
+  local rows = {}
+  for y = 1, 14 do rows[y] = table.concat(g[y]) end
+  return rows
+end
+
+local function plot(g, x, y, ch)
+  if x >= 0 and x < 14 and y >= 0 and y < 14 then g[y + 1][x + 1] = ch end
+end
+
+-- eyeball: 4x5 rounded oval at (ox,oy); pupil 2x2 at (ox+px_, oy+py_)
+local function eyeball(g, ox, oy, px_, py_)
+  for _, p in ipairs({ {1,0},{2,0}, {0,1},{1,1},{2,1},{3,1}, {0,2},{1,2},{2,2},{3,2},
+                       {0,3},{1,3},{2,3},{3,3}, {1,4},{2,4} }) do
+    plot(g, ox + p[1], oy + p[2], "w")
+  end
+  for dy = 0, 1 do for dx = 0, 1 do plot(g, ox + px_ + dx, oy + py_ + dy, "p") end end
+end
+
+local function build_eye_textures()
+  local eye_off = { r = {1, 0}, l = {-1, 0}, u = {0, -1}, d = {0, 1} }
+  local pup_off = { r = {2, 2}, l = {0, 2}, u = {1, 0}, d = {1, 3} }
+  for dir, eo in pairs(eye_off) do
+    local g = new_grid()
+    local po = pup_off[dir]
+    eyeball(g, 2 + eo[1], 3 + eo[2], po[1], po[2])
+    eyeball(g, 8 + eo[1], 3 + eo[2], po[1], po[2])
+    gen_pixels("eyes_" .. dir, grid_rows(g), { w = "#ffffff", p = "#2121ff" })
+  end
+end
+
+local function build_scared_faces()
+  for name, color in pairs({ face_n = "#ffb8ae", face_f = "#ff0000" }) do
+    local g = new_grid()
+    for dy = 0, 1 do for dx = 0, 1 do
+      plot(g, 4 + dx, 5 + dy, "f")
+      plot(g, 8 + dx, 5 + dy, "f")
+    end end
+    for _, x in ipairs({ 2, 3, 6, 7, 10, 11 }) do plot(g, x, 9, "f") end
+    for _, x in ipairs({ 1, 4, 5, 8, 9, 12 }) do plot(g, x, 10, "f") end
+    gen_pixels(name, grid_rows(g), { f = color })
+  end
+end
+
+-- circle r=6.5 minus a mouth wedge with its hinge 3px behind center
+local function pac_rows(half_angle)
+  local g = new_grid()
+  local edge_angle = math.atan(6.5 * math.sin(half_angle), 6.5 * math.cos(half_angle) + 3)
+  for y = 0, 13 do
+    for x = 0, 13 do
+      local vx, vy = x + 0.5 - 7, y + 0.5 - 7
+      if vx * vx + vy * vy <= 6.5 * 6.5 then
+        local wx, wy = vx + 3, vy
+        local in_mouth = half_angle > 0 and wx > 0
+          and math.atan(math.abs(wy), wx) <= edge_angle
+        if not in_mouth then plot(g, x, y, "y") end
+      end
+    end
+  end
+  return grid_rows(g)
+end
+
+GHOST_COLORS = { "#ff0000", "#ffb8ff", "#00ffff", "#ffb852" }
+
+function build_sprites()
+  gen_pixels("pac0", pac_rows(0), { y = "#ffff00" })
+  gen_pixels("pac1", pac_rows(math.atan(4, 5)), { y = "#ffff00" })
+  gen_pixels("pac2", pac_rows(math.atan(6, 3)), { y = "#ffff00" })
+
+  for i, color in ipairs(GHOST_COLORS) do
+    gen_pixels("g" .. i .. "a", GHOST_BODY_A, { ["#"] = color })
+    gen_pixels("g" .. i .. "b", GHOST_BODY_B, { ["#"] = color })
+  end
+  gen_pixels("fra", GHOST_BODY_A, { ["#"] = "#2121ff" })
+  gen_pixels("frb", GHOST_BODY_B, { ["#"] = "#2121ff" })
+  gen_pixels("fwa", GHOST_BODY_A, { ["#"] = "#dedeff" })
+  gen_pixels("fwb", GHOST_BODY_B, { ["#"] = "#dedeff" })
+
+  build_eye_textures()
+  build_scared_faces()
+end
+
+SPRITE_SCALE = 2
+
 function tile_char(tx, ty)
   if ty < 0 or ty >= ROWS or tx < 0 or tx >= COLS then return "#" end
   return MAZE[ty + 1]:sub(tx + 1, tx + 1)
@@ -90,19 +219,22 @@ function on_init()
   set_tint(level_label, 255, 255, 255)
   life_icons = {}
 
-  pac = { id = spawn_shape("circle", 0, 0, T * 1.5) }
-  set_tint(pac.id, 255, 255, 0)
+  build_sprites()
+
+  pac = { id = spawn_sprite("pac1", 0, 0) }
+  set_scale(pac.id, SPRITE_SCALE)
   set_pos(pac.id, 0, 0, 1.1)
 
   ghosts = {}
   GHOST_DEFS = {
-    { name = "blinky", color = { 255, 0, 0 },     corner = { 26, 1 } },
-    { name = "pinky",  color = { 255, 184, 255 }, corner = { 1, 1 } },
-    { name = "inky",   color = { 0, 255, 255 },   corner = { 26, 29 } },
-    { name = "clyde",  color = { 255, 184, 82 },  corner = { 1, 29 } },
+    { name = "blinky", corner = { 26, 1 } },
+    { name = "pinky",  corner = { 1, 1 } },
+    { name = "inky",   corner = { 26, 29 } },
+    { name = "clyde",  corner = { 1, 29 } },
   }
   for i, d in ipairs(GHOST_DEFS) do
-    local g = { id = spawn_shape("circle", 0, 0, T * 1.5), color = d.color, corner = d.corner }
+    local g = { id = spawn_sprite("g" .. i .. "a", 0, 0), corner = d.corner }
+    set_scale(g.id, SPRITE_SCALE)
     set_pos(g.id, 0, 0, 1)
     ghosts[i] = g
   end
@@ -119,8 +251,12 @@ function spawn_pellets()
     for tx = 0, COLS - 1 do
       local ch = tile_char(tx, ty)
       if ch == "." or ch == "o" then
-        local d = ch == "o" and 13 or 5
-        local id = spawn_shape("circle", px(tx + 0.5), py(ty + 0.5), d)
+        local id
+        if ch == "o" then
+          id = spawn_shape("circle", px(tx + 0.5), py(ty + 0.5), 13)
+        else
+          id = spawn_shape("rect", px(tx + 0.5), py(ty + 0.5), 4, 4) -- arcade square dot
+        end
         set_tint(id, 255, 184, 174)
         set_pos(id, px(tx + 0.5), py(ty + 0.5), 0.1)
         pellets[ty * COLS + tx] = { id = id, power = ch == "o" }
@@ -134,8 +270,7 @@ end
 function reset_positions(first)
   pac.x, pac.y = 14.0, 23.5
   pac.dx, pac.dy, pac.wdx, pac.wdy = -1, 0, -1, 0
-  pac.mouth = 0
-  set_scale(pac.id, 1)
+  set_scale(pac.id, SPRITE_SCALE)
 
   local house = { { 14.0, 11.5 }, { 13.5, 14.5 }, { 11.5, 14.5 }, { 16.5, 14.5 } }
   local delays = first and { -1, 2, 5, 8 } or { -1, 1, 2, 3 }
@@ -149,7 +284,7 @@ function reset_positions(first)
       g.state = "house"
       g.timer = delays[i]
     end
-    set_tint(g.id, g.color[1], g.color[2], g.color[3])
+    apply_ghost_skin(g, i)
   end
 
   mode, mode_timer = "scatter", 7
@@ -294,7 +429,6 @@ function update_ghost(g, i, dt)
       g.glide = nil
       if g.state == "normal" then g.dx, g.dy = -1, 0 end
       if g.state == "house" then g.timer = 0.6 end
-      apply_ghost_tint(g)
     end
   else
     step_actor(g, ghost_speed(g), dt, ghost_decide_for(i))
@@ -303,21 +437,29 @@ function update_ghost(g, i, dt)
       start_glide(g, 13.5, 14.5, 0.7, "house")
     end
   end
+  apply_ghost_skin(g, i)
   set_pos(g.id, px(g.x), py(g.y))
 end
 
-function apply_ghost_tint(g)
+-- pick the right body texture: color/frame, blue/white frightened, or
+-- hidden entirely when only the eyes are racing home
+function apply_ghost_skin(g, i)
+  local frame = math.floor(t * 7) % 2 == 0 and "a" or "b"
   if g.state == "eyes" then
     set_tint(g.id, 255, 255, 255, 0)
-  elseif g.state == "fright" then
-    if fright_timer < 2 and math.floor(fright_timer * 4) % 2 == 0 then
-      set_tint(g.id, 222, 222, 255)
-    else
-      set_tint(g.id, 33, 33, 222)
-    end
-  else
-    set_tint(g.id, g.color[1], g.color[2], g.color[3])
+    return
   end
+  set_tint(g.id, 255, 255, 255, 255)
+  if g.state == "fright" then
+    local flash = fright_timer < 2 and math.floor(fright_timer * 4) % 2 == 0
+    set_texture(g.id, (flash and "fw" or "fr") .. frame)
+  else
+    set_texture(g.id, "g" .. i .. frame)
+  end
+end
+
+function ghost_fright_flashing(g)
+  return g.state == "fright" and fright_timer < 2 and math.floor(fright_timer * 4) % 2 == 0
 end
 
 -- ---------------------------------------------------------------- update
@@ -348,7 +490,7 @@ function on_update(dt)
     return
   elseif state == "dying" then
     state_timer = state_timer - dt
-    set_scale(pac.id, math.max(state_timer / 1.4, 0.05))
+    set_scale(pac.id, SPRITE_SCALE * math.max(state_timer / 1.4, 0.05))
     if state_timer <= 0 then
       lives = lives - 1
       if lives <= 0 then
@@ -420,7 +562,6 @@ function on_update(dt)
         if g.state == "normal" then
           g.state = "fright"
           g.dx, g.dy = -g.dx, -g.dy
-          apply_ghost_tint(g)
         end
       end
     else
@@ -437,7 +578,7 @@ function on_update(dt)
     fright_timer = fright_timer - dt
     if fright_timer <= 0 then
       for _, g in ipairs(ghosts) do
-        if g.state == "fright" then g.state = "normal" apply_ghost_tint(g) end
+        if g.state == "fright" then g.state = "normal" end
       end
     end
   else
@@ -452,7 +593,6 @@ function on_update(dt)
 
   for i, g in ipairs(ghosts) do
     update_ghost(g, i, dt)
-    if g.state == "fright" then apply_ghost_tint(g) end
 
     local d2 = (g.x - pac.x) ^ 2 + (g.y - pac.y) ^ 2
     if d2 < 0.36 then
@@ -461,7 +601,6 @@ function on_update(dt)
         add_score(100 * 2 ^ combo)
         play_sound("eatghost")
         g.state = "eyes"
-        apply_ghost_tint(g)
       elseif g.state == "normal" then
         state, state_timer = "dying", 1.4
         play_sound("death")
@@ -476,8 +615,20 @@ function add_score(n)
   set_text(score_label, "score " .. score)
 end
 
+PAC_FRAMES = { "pac0", "pac1", "pac2", "pac1" }
+
 function sync_pac()
-  pac.mouth = pac.mouth + 1
+  local moving = pac.dx ~= 0 or pac.dy ~= 0
+  if moving then
+    set_texture(pac.id, PAC_FRAMES[math.floor(t * 14) % 4 + 1])
+  else
+    set_texture(pac.id, "pac1")
+  end
+  local rot = 0
+  if pac.dx < 0 then rot = 180
+  elseif pac.dy > 0 then rot = 90
+  elseif pac.dy < 0 then rot = 270 end
+  set_rot(pac.id, rot)
   set_pos(pac.id, px(pac.x), py(pac.y))
 end
 
@@ -488,28 +639,21 @@ end
 
 -- ---------------------------------------------------------------- draw
 
-function on_draw()
-  -- pacman's chomping mouth: a clear-color bite in the movement direction
-  if state ~= "dying" and (pac.dx ~= 0 or pac.dy ~= 0) then
-    local open = (math.sin(t * 18) + 1) / 2
-    local r = T * 0.42 * open
-    if r > 1 then
-      set_color(0, 0, 0)
-      draw_circle(px(pac.x) + pac.dx * T * 0.45, py(pac.y) + pac.dy * T * 0.45, r)
-    end
-  end
+function dir_char(g)
+  if g.dy < 0 then return "u" end
+  if g.dy > 0 then return "d" end
+  if g.dx > 0 then return "r" end
+  return "l"
+end
 
-  -- ghost eyes
+function on_draw()
+  -- ghost faces: directional eyes, or the frightened face
   for _, g in ipairs(ghosts) do
-    if g.state ~= "house" or true then
-      local gx, gy = px(g.x), py(g.y)
-      local sep = T * 0.22
-      set_color(255, 255, 255)
-      draw_circle(gx - sep, gy - T * 0.1, T * 0.16)
-      draw_circle(gx + sep, gy - T * 0.1, T * 0.16)
-      set_color(40, 40, 255)
-      draw_circle(gx - sep + g.dx * 2, gy - T * 0.1 + g.dy * 2, T * 0.08)
-      draw_circle(gx + sep + g.dx * 2, gy - T * 0.1 + g.dy * 2, T * 0.08)
+    local gx, gy = px(g.x), py(g.y)
+    if g.state == "fright" then
+      draw_sprite(ghost_fright_flashing(g) and "face_f" or "face_n", gx, gy, 0, SPRITE_SCALE)
+    else
+      draw_sprite("eyes_" .. dir_char(g), gx, gy, 0, SPRITE_SCALE)
     end
   end
 end
