@@ -76,6 +76,10 @@ draw_panels :: proc(ed: ^Editor, e: ^engine.Engine, s: ^script.Script) {
 		ed.selected = ~engine.EntityId(0)
 	}
 	rl.GuiCheckBox({230, 10, 16, 16}, "snap", &ed.snap)
+	if rl.GuiButton({296, 6, 56, 24}, ed.view_3d ? "3D view" : "2D view") {
+		ed.view_3d = !ed.view_3d
+		ed.dragging = false
+	}
 	if ed.status_timer > 0 {
 		msg := strings.clone_to_cstring(ed.status, context.temp_allocator)
 		rl.DrawText(msg, i32(w) - 250, 12, 14, {220, 220, 140, 255})
@@ -171,7 +175,21 @@ draw_inspector :: proc(ed: ^Editor, e: ^engine.Engine, w: f32) {
 	y += 30
 
 	// variant-specific
+	asset_name := "" // recipe lookup target
 	#partial switch &v in ent.variant {
+	case engine.MeshRef:
+		drag_number(ed, 10, {pad, y, fw / 2 - 2, 20}, "y", &ent.pos.y, 0.2)
+		y += 26
+		rl.DrawText("model", i32(pad), i32(y) + 4, 12, rl.GRAY)
+		if rl.GuiTextBox({pad + 60, y, fw - 60, 22}, cstring(raw_data(ed.tex_buf[:])), len(ed.tex_buf), ed.tex_edit) {
+			ed.tex_edit = !ed.tex_edit
+			if !ed.tex_edit {
+				delete(v.model)
+				v.model = strings.clone(buf_to_string(ed.tex_buf[:]))
+			}
+		}
+		asset_name = v.model
+		y += 30
 	case engine.Sprite:
 		rl.DrawText("texture", i32(pad), i32(y) + 4, 12, rl.GRAY)
 		if rl.GuiTextBox({pad + 60, y, fw - 60, 22}, cstring(raw_data(ed.tex_buf[:])), len(ed.tex_buf), ed.tex_edit) {
@@ -181,6 +199,7 @@ draw_inspector :: proc(ed: ^Editor, e: ^engine.Engine, w: f32) {
 				v.texture = strings.clone(buf_to_string(ed.tex_buf[:]))
 			}
 		}
+		asset_name = v.texture
 		y += 30
 	case engine.Shape:
 		drag_number(ed, 7, {pad, y, fw / 2 - 2, 20}, "w", &v.size.x, 1)
@@ -198,6 +217,37 @@ draw_inspector :: proc(ed: ^Editor, e: ^engine.Engine, w: f32) {
 		y += 26
 		drag_number(ed, 9, {pad, y, fw / 2 - 2, 20}, "size", &v.size, 0.5)
 		y += 30
+	}
+
+	// recipe sliders: live regen of the generated asset this entity uses
+	if recipe, has_recipe := &e.assets.recipes[asset_name]; has_recipe {
+		rl.DrawText("~ recipe", i32(pad), i32(y) + 4, 12, {160, 200, 255, 255})
+		y += 20
+		changed := false
+		seed := f32(recipe.seed)
+		drag_number(ed, 20, {pad, y, fw / 2 - 2, 20}, "seed", &seed, 0.2)
+		if i64(seed) != recipe.seed {
+			recipe.seed = i64(seed)
+			changed = true
+		}
+		y += 24
+		id := 21
+		for key, &value in recipe.params {
+			label := strings.clone_to_cstring(key, context.temp_allocator)
+			speed: f32 = value >= 16 ? 1 : 0.05
+			v := f32(value)
+			drag_number(ed, id, {pad, y, fw / 2 - 2, 20}, label, &v, speed)
+			if f64(v) != value {
+				value = f64(v)
+				changed = true
+			}
+			id += 1
+			y += 24
+		}
+		if changed {
+			engine.generate_from_recipe(e, recipe^)
+		}
+		y += 6
 	}
 
 	// tint

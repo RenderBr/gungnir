@@ -37,6 +37,13 @@ param :: proc(r: GenRecipe, key: string, def: f64) -> f64 {
 // Takes ownership of the recipe, generates the asset, registers both.
 // The single code path for scripts, level loading, and editor regen.
 apply_recipe :: proc(e: ^Engine, r: GenRecipe) {
+	generate_from_recipe(e, r)
+	store_recipe(e, r)
+}
+
+// Regenerates the asset without touching recipe storage. The editor calls
+// this after mutating a stored recipe's fields in place.
+generate_from_recipe :: proc(e: ^Engine, r: GenRecipe) {
 	switch r.kind {
 	case "texture":
 		opts := gen.default_texture_opts()
@@ -111,8 +118,6 @@ apply_recipe :: proc(e: ^Engine, r: GenRecipe) {
 		register_sound(e, r.name, rl.LoadSoundFromWave(wave))
 		rl.UnloadWave(wave)
 	}
-
-	store_recipe(e, r)
 }
 
 @(private = "file")

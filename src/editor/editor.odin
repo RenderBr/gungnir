@@ -10,7 +10,9 @@ GRID_DEFAULT :: 8
 Editor :: struct {
 	enabled: bool, // editor UI present (launched --editor or F1)
 	playing: bool, // false = edit mode
+	view_3d: bool, // which view the edit camera + picking use
 	cam:     rl.Camera2D,
+	orbit:   Orbit,
 
 	selected: engine.EntityId,
 	dragging: bool,
@@ -41,6 +43,7 @@ init :: proc(ed: ^Editor, enabled: bool) {
 	ed.enabled = enabled
 	ed.playing = false
 	ed.cam = {zoom = 1}
+	ed.orbit = orbit_defaults()
 	ed.grid = GRID_DEFAULT
 	ed.snap = true
 	ed.drag_num_id = -1
@@ -115,10 +118,18 @@ toggle_play :: proc(ed: ^Editor, e: ^engine.Engine, s: ^script.Script) {
 
 update :: proc(ed: ^Editor, e: ^engine.Engine, dt: f32) {
 	ed.status_timer = max(0, ed.status_timer - dt)
+	if ed.view_3d {
+		update_3d(ed, e)
+	} else {
+		update_2d(ed, e)
+	}
+	shortcuts(ed, e)
+}
 
+@(private)
+update_2d :: proc(ed: ^Editor, e: ^engine.Engine) {
 	mouse := rl.GetMousePosition()
 	over_ui := ui_blocks_mouse(mouse)
-	editing_text := ed.name_edit || ed.text_edit || ed.tex_edit
 
 	// camera: right/middle drag pans, wheel zooms around the cursor
 	if rl.IsMouseButtonDown(.RIGHT) || rl.IsMouseButtonDown(.MIDDLE) {
@@ -157,8 +168,12 @@ update :: proc(ed: ^Editor, e: ^engine.Engine, dt: f32) {
 			ed.dragging = false
 		}
 	}
+}
 
-	// shortcuts (suppressed while a textbox is being edited)
+// Suppressed while a textbox is being edited.
+@(private)
+shortcuts :: proc(ed: ^Editor, e: ^engine.Engine) {
+	editing_text := ed.name_edit || ed.text_edit || ed.tex_edit
 	if !editing_text {
 		if rl.IsKeyPressed(.BACKSPACE) || rl.IsKeyPressed(.DELETE) {
 			if engine.get(&e.scene, ed.selected) != nil {

@@ -13,11 +13,14 @@ main :: proc() {
 	game_dir := "examples/hello"
 	shot_path: string // dev flag: screenshot after ~1s, then exit
 	editor_flag := false
+	view3d_flag := false
 	for arg in os.args[1:] {
 		if strings.has_prefix(arg, "--shot=") {
 			shot_path = strings.trim_prefix(arg, "--shot=")
 		} else if arg == "--editor" {
 			editor_flag = true
+		} else if arg == "--3d" {
+			view3d_flag = true
 		} else if !strings.has_prefix(arg, "-") {
 			game_dir = arg
 		}
@@ -49,6 +52,7 @@ main :: proc() {
 
 	ed: editor.Editor
 	editor.init(&ed, editor_flag)
+	ed.view_3d = view3d_flag
 	defer editor.destroy(&ed)
 
 	frame := 0
@@ -73,10 +77,16 @@ main :: proc() {
 		}
 
 		engine.begin_frame(&eng)
-		engine.begin_3d(&eng)
+		if editing && ed.view_3d {
+			rl.BeginMode3D(editor.orbit_camera(ed.orbit))
+		} else {
+			engine.begin_3d(&eng)
+		}
 		engine.draw_entities_3d(&eng)
 		if running {
 			script.call_draw_3d(&scr)
+		} else if ed.view_3d {
+			editor.draw_world_3d(&ed, &eng)
 		}
 		engine.end_3d(&eng)
 
