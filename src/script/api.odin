@@ -20,6 +20,7 @@ register_api :: proc(L: ^lua.State) {
 	register_input(L)
 	register_misc(L)
 	register_entity(L)
+	register_gen(L)
 
 	// Lua-side bootstrap for trivial aliases.
 	bootstrap :: `log = print`

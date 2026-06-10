@@ -56,6 +56,7 @@ l_srand :: proc "c" (L: ^lua.State) -> c.int {
 	seed := lua.L_checkinteger(L, 1)
 	context = g_ctx
 	rand.reset(u64(seed))
+	g_noise_seed = i64(seed)
 	return 0
 }
 

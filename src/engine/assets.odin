@@ -12,6 +12,7 @@ Assets :: struct {
 	textures: map[string]rl.Texture2D,
 	sounds:   map[string]rl.Sound,
 	models:   map[string]rl.Model,
+	recipes:  map[string]GenRecipe, // keyed by recipe.name (map owns via recipe)
 	missing:  rl.Texture2D, // magenta checker placeholder
 }
 
@@ -34,6 +35,10 @@ assets_destroy :: proc(a: ^Assets) {
 		rl.UnloadModel(mdl)
 		delete(name)
 	}
+	for _, &recipe in a.recipes {
+		recipe_free(&recipe)
+	}
+	delete(a.recipes)
 	delete(a.textures)
 	delete(a.sounds)
 	delete(a.models)
