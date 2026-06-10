@@ -1,0 +1,16 @@
+{
+  "runtime.version": "Lua 5.4",
+  "diagnostics.globals": [
+    "on_init", "on_update", "on_draw", "on_draw_3d", "on_gui",
+    "spawn_sprite", "spawn_shape", "spawn_mesh", "spawn_text", "despawn",
+    "get_pos", "set_pos", "set_rot", "set_scale", "set_tint",
+    "find", "exists",
+    "draw_sprite", "draw_rect", "draw_circle", "draw_line", "draw_text",
+    "draw_cube", "draw_grid", "set_color", "set_clear_color",
+    "key_down", "key_pressed", "mouse_pos", "mouse_down", "mouse_pressed", "mouse_wheel",
+    "set_camera", "set_camera_3d", "screen_size",
+    "gen_texture", "gen_sprite", "gen_palette", "gen_mesh_terrain", "gen_sound",
+    "noise", "srand", "rand",
+    "load_level", "clear_scene", "play_sound", "log", "quit"
+  ]
+}

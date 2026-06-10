@@ -2,37 +2,91 @@ package main
 
 import "core:fmt"
 import "core:os"
+import "core:path/filepath"
+import "core:strings"
 import rl "vendor:raylib"
-import lua "vendor:lua/5.4"
+import "engine"
+import "script"
 
 main :: proc() {
-	lua_smoke_test()
+	game_dir := "examples/hello"
+	for arg in os.args[1:] {
+		if !strings.has_prefix(arg, "-") {
+			game_dir = arg
+		}
+	}
+	main_lua, _ := filepath.join({game_dir, "main.lua"})
+	if !os.exists(main_lua) {
+		fmt.eprintfln("no main.lua found in %q", game_dir)
+		os.exit(1)
+	}
 
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
+	rl.SetTraceLogLevel(.WARNING)
 	rl.InitWindow(960, 600, "odin-engine")
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
+	rl.SetExitKey(.KEY_NULL) // esc belongs to games, not the window
 
-	for !rl.WindowShouldClose() {
-		rl.BeginDrawing()
-		rl.ClearBackground({24, 24, 32, 255})
-		rl.DrawText("odin-engine: phase 0", 20, 20, 28, rl.RAYWHITE)
-		rl.EndDrawing()
+	eng: engine.Engine
+	engine.init(&eng, game_dir)
+
+	scr: script.Script
+	script.init(&scr, &eng, main_lua)
+	defer script.destroy(&scr)
+
+	for !rl.WindowShouldClose() && !eng.should_quit {
+		dt := min(rl.GetFrameTime(), 0.1)
+
+		script.tick_hot_reload(&scr, dt)
+		if restart_requested() {
+			script.restart(&scr)
+		}
+
+		script.call_update(&scr, dt)
+
+		engine.begin_frame(&eng)
+		engine.begin_3d(&eng)
+		script.call_draw_3d(&scr)
+		engine.end_3d(&eng)
+		engine.begin_2d(&eng)
+		script.call_draw(&scr)
+		engine.end_2d(&eng)
+		script.call_gui(&scr)
+		draw_overlay(&scr)
+		engine.end_frame(&eng)
 	}
 }
 
-lua_smoke_test :: proc() {
-	L := lua.L_newstate()
-	if L == nil {
-		fmt.eprintln("failed to create lua state")
-		os.exit(1)
-	}
-	defer lua.close(L)
-	lua.L_openlibs(L)
+restart_requested :: proc() -> bool {
+	super := rl.IsKeyDown(.LEFT_SUPER) || rl.IsKeyDown(.RIGHT_SUPER)
+	return super && rl.IsKeyPressed(.R)
+}
 
-	if lua.L_dostring(L, "return 1 + 1") != 0 {
-		fmt.eprintln("lua smoke test failed:", lua.tostring(L, -1))
-		os.exit(1)
+// Screen-space status layer: script error banner and reload toasts.
+draw_overlay :: proc(s: ^script.Script) {
+	if s.broken {
+		w := rl.GetScreenWidth()
+		rl.DrawRectangle(0, 0, w, 40, {180, 30, 30, 230})
+		rl.DrawText("script error (fix + save to reload, cmd+r to restart)", 12, 10, 20, rl.RAYWHITE)
+
+		msg := strings.clone_to_cstring(s.last_error, context.temp_allocator)
+		rl.DrawRectangle(0, 40, w, 24 + 18 * count_lines(s.last_error), {0, 0, 0, 170})
+		rl.DrawText(msg, 12, 52, 16, {255, 200, 200, 255})
 	}
-	fmt.println("lua smoke test: 1 + 1 =", lua.tointeger(L, -1))
+	if s.toast_timer > 0 {
+		msg := strings.clone_to_cstring(s.toast, context.temp_allocator)
+		rl.DrawText(msg, 12, rl.GetScreenHeight() - 28, 18, {140, 220, 140, 255})
+	}
+	free_all(context.temp_allocator)
+}
+
+count_lines :: proc(s: string) -> i32 {
+	n: i32 = 1
+	for ch in s {
+		if ch == '\n' {
+			n += 1
+		}
+	}
+	return n
 }
