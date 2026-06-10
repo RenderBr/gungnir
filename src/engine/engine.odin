@@ -9,8 +9,11 @@ Engine :: struct {
 	draw_color:  rl.Color,
 	cam2d:       rl.Camera2D,
 	cam3d:       rl.Camera3D,
+	scene:       Scene,
+	assets:      Assets,
 }
 
+// Requires an open window (textures need a GL context) and audio device.
 init :: proc(e: ^Engine, game_dir: string) {
 	e.game_dir = game_dir
 	e.clear_color = {24, 24, 32, 255}
@@ -23,4 +26,10 @@ init :: proc(e: ^Engine, game_dir: string) {
 		fovy       = 60,
 		projection = .PERSPECTIVE,
 	}
+	assets_init(&e.assets)
+}
+
+destroy :: proc(e: ^Engine) {
+	scene_destroy(&e.scene)
+	assets_destroy(&e.assets)
 }

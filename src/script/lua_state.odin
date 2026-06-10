@@ -64,6 +64,7 @@ start_state :: proc(s: ^Script) -> bool {
 
 	register_api(s.L)
 	s.broken = false
+	engine.clear_scene(&g_eng.scene) // restart = fresh scene + fresh state
 
 	if !run_main_file(s) {
 		return false

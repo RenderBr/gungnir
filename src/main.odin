@@ -10,8 +10,11 @@ import "script"
 
 main :: proc() {
 	game_dir := "examples/hello"
+	shot_path: string // dev flag: screenshot after ~1s, then exit
 	for arg in os.args[1:] {
-		if !strings.has_prefix(arg, "-") {
+		if strings.has_prefix(arg, "--shot=") {
+			shot_path = strings.trim_prefix(arg, "--shot=")
+		} else if !strings.has_prefix(arg, "-") {
 			game_dir = arg
 		}
 	}
@@ -27,15 +30,20 @@ main :: proc() {
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
 	rl.SetExitKey(.KEY_NULL) // esc belongs to games, not the window
+	rl.InitAudioDevice()
+	defer rl.CloseAudioDevice()
 
 	eng: engine.Engine
 	engine.init(&eng, game_dir)
+	defer engine.destroy(&eng)
 
 	scr: script.Script
 	script.init(&scr, &eng, main_lua)
 	defer script.destroy(&scr)
 
+	frame := 0
 	for !rl.WindowShouldClose() && !eng.should_quit {
+		frame += 1
 		dt := min(rl.GetFrameTime(), 0.1)
 
 		script.tick_hot_reload(&scr, dt)
@@ -50,11 +58,17 @@ main :: proc() {
 		script.call_draw_3d(&scr)
 		engine.end_3d(&eng)
 		engine.begin_2d(&eng)
+		engine.draw_entities_2d(&eng)
 		script.call_draw(&scr)
 		engine.end_2d(&eng)
 		script.call_gui(&scr)
 		draw_overlay(&scr)
 		engine.end_frame(&eng)
+
+		if shot_path != "" && frame == 60 {
+			rl.TakeScreenshot(strings.clone_to_cstring(shot_path, context.temp_allocator))
+			eng.should_quit = true
+		}
 	}
 }
 

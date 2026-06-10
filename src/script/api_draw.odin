@@ -3,11 +3,13 @@ package script
 import "core:c"
 import lua "vendor:lua/5.4"
 import rl "vendor:raylib"
+import "../engine"
 
 register_draw :: proc(L: ^lua.State) {
 	reg(L, "set_color", l_set_color)
 	reg(L, "set_clear_color", l_set_clear_color)
 	reg(L, "draw_rect", l_draw_rect)
+	reg(L, "draw_sprite", l_draw_sprite)
 	reg(L, "draw_circle", l_draw_circle)
 	reg(L, "draw_line", l_draw_line)
 	reg(L, "draw_text", l_draw_text)
@@ -56,6 +58,22 @@ l_draw_line :: proc "c" (L: ^lua.State) -> c.int {
 	y2 := arg_f32(L, 4)
 	thick := opt_f32(L, 5, 1)
 	rl.DrawLineEx({x1, y1}, {x2, y2}, thick, g_eng.draw_color)
+	return 0
+}
+
+// draw_sprite(tex, x, y [, rot, scale]) — immediate mode, centered on x,y.
+l_draw_sprite :: proc "c" (L: ^lua.State) -> c.int {
+	name := lua.L_checkstring(L, 1)
+	x := arg_f32(L, 2)
+	y := arg_f32(L, 3)
+	rot := opt_f32(L, 4, 0)
+	scale := opt_f32(L, 5, 1)
+	context = g_ctx
+	tex := engine.get_texture(g_eng, string(name))
+	w := f32(tex.width) * scale
+	h := f32(tex.height) * scale
+	rl.DrawTexturePro(tex, {0, 0, f32(tex.width), f32(tex.height)},
+		{x, y, w, h}, {w / 2, h / 2}, rot, rl.WHITE)
 	return 0
 }
 
