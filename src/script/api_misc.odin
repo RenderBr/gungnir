@@ -2,6 +2,7 @@ package script
 
 import "core:c"
 import "core:fmt"
+import "core:math"
 import "core:math/rand"
 import lua "vendor:lua/5.4"
 import rl "vendor:raylib"
@@ -13,6 +14,9 @@ register_misc :: proc(L: ^lua.State) {
 	reg(L, "quit", l_quit)
 	reg(L, "play_sound", l_play_sound)
 	reg(L, "load_sound_slice", l_load_sound_slice)
+	reg(L, "clamp", l_clamp)
+	reg(L, "circle_hit", l_circle_hit)
+	reg(L, "rect_hit", l_rect_hit)
 	reg(L, "clear_scene", l_clear_scene)
 	reg(L, "load_level", l_load_level)
 	reg(L, "save_level", l_save_level)
@@ -20,6 +24,7 @@ register_misc :: proc(L: ^lua.State) {
 	reg(L, "set_screen_shader", l_set_screen_shader)
 	reg(L, "set_shader_param", l_set_shader_param)
 	reg(L, "set_fullscreen", l_set_fullscreen)
+	reg(L, "set_maximized", l_set_maximized)
 	reg(L, "set_lighting", l_set_lighting)
 	reg(L, "set_ambient", l_set_ambient)
 }
@@ -87,6 +92,18 @@ l_set_fullscreen :: proc "c" (L: ^lua.State) -> c.int {
 	context = g_ctx
 	if bool(on) != rl.IsWindowState({.BORDERLESS_WINDOWED_MODE}) {
 		rl.ToggleBorderlessWindowed()
+	}
+	return 0
+}
+
+// set_maximized(on) — maximize the window (keeps title bar, unlike fullscreen).
+l_set_maximized :: proc "c" (L: ^lua.State) -> c.int {
+	on := b32(lua.toboolean(L, 1))
+	context = g_ctx
+	if bool(on) {
+		rl.MaximizeWindow()
+	} else {
+		rl.RestoreWindow()
 	}
 	return 0
 }
@@ -175,4 +192,67 @@ l_srand :: proc "c" (L: ^lua.State) -> c.int {
 l_quit :: proc "c" (L: ^lua.State) -> c.int {
 	g_eng.should_quit = true
 	return 0
+}
+
+// -- math/collision helpers --------------------------------------------------
+
+// Resolves an argument to an (x,y) pair: a entity id, or a table/GameObject
+// with .x/.y. Raises on a bad argument. Tolerant by design so hit tests work
+// whether the caller tracks positions on entities or in Lua tables.
+@(private)
+arg_xy :: proc "c" (L: ^lua.State, n: c.int, what: cstring) -> (f32, f32) {
+	if b32(lua.isnumber(L, n)) {
+		id := engine.EntityId(lua.L_checkinteger(L, n))
+		context = g_ctx
+		ent := engine.get(&g_eng.scene, id)
+		if ent == nil {
+			lua.L_error(L, "%s: entity does not exist", what)
+		}
+		return ent.pos.x, ent.pos.y
+	}
+	if b32(lua.istable(L, n)) {
+		lua.getfield(L, n, "x")
+		lua.getfield(L, n, "y")
+		if lua.isnumber(L, -2) && lua.isnumber(L, -1) {
+			x := f32(lua.tonumber(L, -2))
+			y := f32(lua.tonumber(L, -1))
+			lua.pop(L, 2)
+			return x, y
+		}
+		lua.pop(L, 2)
+	}
+	lua.L_error(L, "%s: expected entity id or {x=,y=} table", what)
+	return 0, 0
+}
+
+// clamp(x, lo, hi) — replaces the math.max(lo, math.min(hi, x)) idiom.
+l_clamp :: proc "c" (L: ^lua.State) -> c.int {
+	x := f32(lua.L_checknumber(L, 1))
+	lo := f32(lua.L_checknumber(L, 2))
+	hi := f32(lua.L_checknumber(L, 3))
+	lua.pushnumber(L, lua.Number(clamp(x, lo, hi)))
+	return 1
+}
+
+// circle_hit(a, b, r) -> bool — circular collision; a/b accept entity id or
+// {x=,y=} (GameObjects work too); r is the sum of radii or a single radius.
+l_circle_hit :: proc "c" (L: ^lua.State) -> c.int {
+	ax, ay := arg_xy(L, 1, "circle_hit")
+	bx, by := arg_xy(L, 2, "circle_hit")
+	r := arg_f32(L, 3)
+	dx, dy := ax - bx, ay - by
+	lua.pushboolean(L, b32(dx*dx + dy*dy < r*r))
+	return 1
+}
+
+// rect_hit(a, b, w, h) -> bool — AABB overlap centered on each position;
+// w/h are the full widths/heights of the rects. a/b accept entity id or
+// {x=,y=} (GameObjects work too).
+l_rect_hit :: proc "c" (L: ^lua.State) -> c.int {
+	ax, ay := arg_xy(L, 1, "rect_hit")
+	bx, by := arg_xy(L, 2, "rect_hit")
+	w := arg_f32(L, 3) * 0.5
+	h := arg_f32(L, 4) * 0.5
+	lua.pushboolean(L, b32(math.abs(ax - bx) < w && math.abs(ay - by) < h))
+	return 1
 }

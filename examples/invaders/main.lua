@@ -1,5 +1,7 @@
 -- invaders: every sprite and sound generated from seeds.
--- Change SEED for a whole new skin.
+-- Change SEED for a whole new skin. GameObject + move + clamp + rect_hit
+-- showcase: positions live on the objects (no parallel x/y tables), the
+-- ship and bullets use move(), collisions use rect_hit.
 
 SEED = 7
 
@@ -20,16 +22,16 @@ function on_init()
   gen_sound("shoot", { wave = "square", freq = 880, slide = -1200, len = 0.12 })
   gen_sound("boom", { wave = "noise", freq = 100, len = 0.25, vol = 0.6 })
 
-  ship = spawn_sprite("ship", W / 2, H - 50)
-  set_scale(ship, 4)
+  ship = GameObject{sprite="ship", x=W/2, y=H-50, scale=4, tag="ship"}
 
   aliens = {}
   for row = 0, 3 do
     for col = 0, 9 do
       local kind = "alien" .. (row % 3 + 1)
-      local a = spawn_sprite(kind, 120 + col * 75, 70 + row * 60)
-      set_scale(a, 4)
-      aliens[#aliens + 1] = { id = a, x = 120 + col * 75, y = 70 + row * 60 }
+      local x, y = 120 + col*75, 70 + row*60
+      local a = GameObject{sprite=kind, x=x, y=y, scale=4, tag="alien"}
+      a.home_x, a.home_y = x, y
+      aliens[#aliens + 1] = a
     end
   end
 
@@ -38,8 +40,7 @@ function on_init()
     stars[i] = { x = rand(W), y = rand(H), speed = 20 + rand(60) }
   end
 
-  bullets = {}
-  dir, t, score = 1, 0, 0
+  t, score = 0, 0
   score_label = spawn_text("score 0", 12, H - 30, 20)
   set_tint(score_label, 255, 255, 255, 170)
 end
@@ -48,57 +49,38 @@ function on_update(dt)
   t = t + dt
 
   -- ship
-  local sx, sy = get_pos(ship)
-  if key_down("left") then sx = sx - 380 * dt end
-  if key_down("right") then sx = sx + 380 * dt end
-  sx = math.max(30, math.min(W - 30, sx))
-  set_pos(ship, sx, sy)
+  if key_down("left")  then ship:move(-380 * dt, 0) end
+  if key_down("right") then ship:move( 380 * dt, 0) end
+  ship.x = clamp(ship.x, 30, W - 30)
 
   if key_pressed("space") then
-    bullets[#bullets + 1] = spawn_sprite("bullet", sx, sy - 30)
+    local b = GameObject{sprite="bullet", x=ship.x, y=ship.y - 30, tag="bullet"}
+    b:add_component{
+      update = function(self, go, dt)
+        go:move(0, -600 * dt)
+        if go.y < -20 then go:destroy() end
+      end,
+    }
     play_sound("shoot")
-  end
-
-  -- bullets
-  for i = #bullets, 1, -1 do
-    local b = bullets[i]
-    local bx, by = get_pos(b)
-    by = by - 600 * dt
-    if by < -20 then
-      despawn(b)
-      table.remove(bullets, i)
-    else
-      set_pos(b, bx, by)
-    end
   end
 
   -- alien swarm marches side to side
   local shift = math.sin(t * 1.2) * 60
   local drop = t * 6
   for _, a in ipairs(aliens) do
-    if exists(a.id) then
-      set_pos(a.id, a.x + shift, a.y + drop)
-    end
+    if a:alive() then a:set_pos(a.home_x + shift, a.home_y + drop) end
   end
 
-  -- collisions
-  for i = #bullets, 1, -1 do
-    local b = bullets[i]
-    if exists(b) then
-      local bx, by = get_pos(b)
-      for _, a in ipairs(aliens) do
-        if exists(a.id) then
-          local ax, ay = get_pos(a.id)
-          if math.abs(bx - ax) < 26 and math.abs(by - ay) < 22 then
-            despawn(a.id)
-            despawn(b)
-            table.remove(bullets, i)
-            play_sound("boom")
-            score = score + 10
-            set_text(score_label, "score " .. score)
-            break
-          end
-        end
+  -- collisions: each bullet vs each live alien
+  for _, b in ipairs(GameObject.with_tag("bullet")) do
+    for _, a in ipairs(GameObject.with_tag("alien")) do
+      if b:alive() and a:alive() and rect_hit(b, a, 26, 22) then
+        b:destroy()
+        a:destroy()
+        play_sound("boom")
+        score = score + 10
+        set_text(score_label, "score " .. score)
+        break
       end
     end
   end

@@ -9,10 +9,14 @@ register_draw :: proc(L: ^lua.State) {
 	reg(L, "set_color", l_set_color)
 	reg(L, "set_clear_color", l_set_clear_color)
 	reg(L, "draw_rect", l_draw_rect)
+	reg(L, "draw_rect_outline", l_draw_rect_outline)
+	reg(L, "draw_rounded_rect", l_draw_rounded_rect)
+	reg(L, "draw_rounded_rect_outline", l_draw_rounded_rect_outline)
 	reg(L, "draw_sprite", l_draw_sprite)
 	reg(L, "draw_circle", l_draw_circle)
 	reg(L, "draw_line", l_draw_line)
 	reg(L, "draw_text", l_draw_text)
+	reg(L, "text_width", l_text_width)
 	reg(L, "set_camera", l_set_camera)
 	reg(L, "set_camera_3d", l_set_camera_3d)
 	reg(L, "screen_size", l_screen_size)
@@ -44,6 +48,52 @@ l_draw_rect :: proc "c" (L: ^lua.State) -> c.int {
 	w := arg_f32(L, 3)
 	h := arg_f32(L, 4)
 	rl.DrawRectangleV({x, y}, {w, h}, g_eng.draw_color)
+	return 0
+}
+
+// draw_rect_outline(x, y, w, h [, thickness]) — top-left corner, like draw_rect.
+l_draw_rect_outline :: proc "c" (L: ^lua.State) -> c.int {
+	x := arg_f32(L, 1)
+	y := arg_f32(L, 2)
+	w := arg_f32(L, 3)
+	h := arg_f32(L, 4)
+	thick := opt_f32(L, 5, 1)
+	rl.DrawRectangleLinesEx({x, y, w, h}, thick, g_eng.draw_color)
+	return 0
+}
+
+// segments for rounded rects: scale with the corner radius so small UI still
+// looks round and large panels stay smooth, clamped to a sane range.
+@(private)
+rounded_segments :: proc "c" (w, h, roundness: f32) -> c.int {
+	r := min(w, h) * 0.5 * roundness
+	seg := i32(r) + 6
+	if seg > 36 { seg = 36 }
+	if seg < 4 { seg = 4 }
+	return seg
+}
+
+// draw_rounded_rect(x, y, w, h [, roundness]) — top-left corner; roundness
+// 0..1 (0 = square, 1 = fully rounded), default 0.2.
+l_draw_rounded_rect :: proc "c" (L: ^lua.State) -> c.int {
+	x := arg_f32(L, 1)
+	y := arg_f32(L, 2)
+	w := arg_f32(L, 3)
+	h := arg_f32(L, 4)
+	roundness := opt_f32(L, 5, 0.2)
+	rl.DrawRectangleRounded({x, y, w, h}, roundness, rounded_segments(w, h, roundness), g_eng.draw_color)
+	return 0
+}
+
+// draw_rounded_rect_outline(x, y, w, h [, roundness, thickness])
+l_draw_rounded_rect_outline :: proc "c" (L: ^lua.State) -> c.int {
+	x := arg_f32(L, 1)
+	y := arg_f32(L, 2)
+	w := arg_f32(L, 3)
+	h := arg_f32(L, 4)
+	roundness := opt_f32(L, 5, 0.2)
+	thick := opt_f32(L, 6, 2)
+	rl.DrawRectangleRoundedLinesEx({x, y, w, h}, roundness, rounded_segments(w, h, roundness), thick, g_eng.draw_color)
 	return 0
 }
 
@@ -88,6 +138,15 @@ l_draw_text :: proc "c" (L: ^lua.State) -> c.int {
 	size := opt_f32(L, 4, 20)
 	rl.DrawText(text, i32(x), i32(y), i32(size), g_eng.draw_color)
 	return 0
+}
+
+// text_width(str, size) -> px — width of a string in the default font.
+l_text_width :: proc "c" (L: ^lua.State) -> c.int {
+	text := lua.L_checkstring(L, 1)
+	size := opt_f32(L, 2, 20)
+	w := rl.MeasureText(text, i32(size))
+	lua.pushnumber(L, lua.Number(w))
+	return 1
 }
 
 // set_camera(x, y [, zoom, rot]) — centers the 2D camera on (x, y).

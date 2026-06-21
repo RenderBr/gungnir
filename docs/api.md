@@ -26,6 +26,7 @@ Colors are 0–255 RGB(A); hex colors are `"#rrggbb"` or `"#rrggbbaa"` strings.
 | `find(name) -> id or nil` | |
 | `get_pos(id) -> x, y, z` | |
 | `set_pos(id, x, y [, z])` | z = draw layer in 2D, world z for meshes |
+| `move(id, dx, dy [, dz])` | adds to current position; flat-API parity with `obj:move()`, avoids the get_pos/set_pos dance |
 | `set_rot(id, deg)` / `set_rot(id, x, y, z)` | |
 | `set_scale(id, s)` / `set_scale(id, sx, sy [, sz])` | |
 | `set_tint(id, r, g, b [, a])` | |
@@ -81,10 +82,14 @@ or rotating a parented child re-bases its local offset, Unity-style.
 
 | Function | Context |
 |---|---|
-| `draw_rect(x, y, w, h)` | `on_draw` / `on_gui` |
-| `draw_circle(x, y, r)` | |
+| `draw_rect(x, y, w, h)` | `on_draw` / `on_gui`; top-left corner |
+| `draw_rect_outline(x, y, w, h [, thickness])` | top-left corner; thickness default 1 |
+| `draw_rounded_rect(x, y, w, h [, roundness])` | top-left corner; roundness 0..1 (0 = square, 1 = fully rounded), default 0.2 |
+| `draw_rounded_rect_outline(x, y, w, h [, roundness, thickness])` | defaults 0.2, 2 |
+| `draw_circle(x, y, r)` | centered on x,y |
 | `draw_line(x1, y1, x2, y2 [, thickness])` | |
-| `draw_text(str, x, y [, size])` | |
+| `draw_text(str, x, y [, size])` | top-left corner |
+| `text_width(str, size) -> px` | width in the default font; use to center text |
 | `draw_sprite(texture, x, y [, rot, scale])` | centered |
 | `draw_cube(x, y, z, w, h, d)` | `on_draw_3d` only |
 | `draw_sphere(x, y, z, r)` | `on_draw_3d` only |
@@ -148,12 +153,16 @@ by name everywhere a file asset would be, and saved into levels as recipes.
 | `clear_scene()` | |
 | `play_sound(name [, volume, pitch])` | plays a sound by name (generated, or loaded via `load_sound_slice` / the `assets/<name>.wav`/`.ogg` fallback); missing name = silent no-op |
 | `load_sound_slice(name, file, start, end) -> bool` | loads `[start, end)` seconds of `assets/<file>` and registers it as `<name>`; `play_sound(name)` then plays just that slice. `false` = missing/undecodable file or bad range; a failed slice never crashes |
+| `clamp(x, lo, hi) -> x` | clamps x to `[lo, hi]`; replaces `math.max(lo, math.min(hi, x))` |
+| `circle_hit(a, b, r) -> bool` | true if `a` and `b` are within `r` (circular collision). `a`/`b` accept an entity id or a `{x=,y=}` table (GameObjects work too); `r` is the sum of radii or a single radius |
+| `rect_hit(a, b, w, h) -> bool` | true if the axis-aligned rects centered on `a` and `b` overlap. `w`/`h` are full widths/heights. `a`/`b` accept entity id or `{x=,y=}` table |
 | `set_clear_color(r, g, b)` | background |
 | `set_crt(on)` | arcade CRT filter: curvature, scanlines, grille, glow; renders at 960x600 and upscales |
 | `set_entity_shader(id, name)` | draw this entity through a custom shader; `nil`/`""` restores default |
 | `set_screen_shader(name)` | full-screen shader over the game image (960x600 canvas); runs before the CRT filter; `nil` clears |
 | `set_shader_param(shader, param, x [,y,z,w])` | set a uniform: 1 number = float, 2 = vec2, 3 = vec3, 4 = vec4 |
 | `set_fullscreen(on)` | borderless fullscreen |
+| `set_maximized(on)` | maximize window (keeps title bar, unlike fullscreen) |
 | `log(...)` | print to console |
 | `quit()` | |
 

@@ -15,6 +15,7 @@ register_entity :: proc(L: ^lua.State) {
 	reg(L, "find", l_find)
 	reg(L, "get_pos", l_get_pos)
 	reg(L, "set_pos", l_set_pos)
+	reg(L, "move", l_move)
 	reg(L, "set_rot", l_set_rot)
 	reg(L, "set_scale", l_set_scale)
 	reg(L, "set_tint", l_set_tint)
@@ -181,6 +182,17 @@ l_set_pos :: proc "c" (L: ^lua.State) -> c.int {
 	ent.pos.x = arg_f32(L, 2)
 	ent.pos.y = arg_f32(L, 3)
 	ent.pos.z = opt_f32(L, 4, ent.pos.z)
+	return 0
+}
+
+// move(id, dx, dy [, dz]) — flat-API parity with GameObject:move(). Avoids
+// the get_pos/set_pos dance that otherwise pushes authors to mirror entity
+// position in a parallel Lua table.
+l_move :: proc "c" (L: ^lua.State) -> c.int {
+	ent := arg_entity(L, 1, "move")
+	ent.pos.x += arg_f32(L, 2)
+	ent.pos.y += arg_f32(L, 3)
+	ent.pos.z += opt_f32(L, 4, 0)
 	return 0
 }
 
