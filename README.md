@@ -12,6 +12,8 @@ A small game engine written in [Odin](https://odin-lang.org) on top of raylib â€
 
 - Odin (tested with `dev-2026-05`)
 - macOS: `brew install lua@5.4` (keg-only; `build.sh` passes the linker path)
+- Linux: no extra steps â€” Odin's `vendor:lua/5.4` bundles a static `liblua54.a`
+- Windows: no extra steps â€” `vendor:lua/5.4` bundles `lua54.dll` (copied to `bin\` by `build.bat`)
 
 ## Run
 
@@ -21,6 +23,12 @@ A small game engine written in [Odin](https://odin-lang.org) on top of raylib â€
 ./run.sh examples/invaders     # every asset generated from a seed
 ./run.sh examples/terrain3d    # fly over generated terrain, 2D HUD on top
 ./run.sh examples/pong --editor  # open the level designer
+```
+
+On Windows use `build.bat` / `run.bat` instead:
+
+```bat
+run.bat examples\hello
 ```
 
 A game is a folder with a `main.lua` (plus optional `level.json` and `assets/`).
