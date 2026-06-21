@@ -2,11 +2,11 @@
 
 A small game engine written in [Odin](https://odin-lang.org) on top of raylib — named for Odin's spear:
 
-- **Lua scripting** with a dead-simple API — a playable game in ~30 lines
+- **Lua scripting** with a dead-simple API — a playable game in ~30 lines; split across files with `require()`
 - **2D and 3D in one scene** — sprites, shapes, text, meshes; 2D HUD over a 3D world for free
 - **In-engine level designer** — edit, play, stop; the authored level always comes back intact
 - **Procedural assets** — generated sprites, textures, palettes, terrain, and synthesized sound effects, all from seeds; levels store recipes, not pixels
-- **Hot reload** — save your script and the running game updates; pass `--hot` to enable, script errors show a banner instead of crashing
+- **Hot reload** — pass `--hot` and save any `.lua` file in your game directory; the running game updates (modules and all), script errors show a banner instead of crashing
 
 ## Requirements
 
@@ -33,6 +33,8 @@ run.bat examples\hello
 ```
 
 A game is a folder with a `main.lua` (plus optional `level.json` and `assets/`).
+Split logic across files with `require()` — see `examples/balatro` and
+`examples/pacman` for multi-file project structure.
 
 ## A complete game
 
@@ -85,5 +87,5 @@ src/
   script/   lua state, error harness, hot reload, the script-facing API
   editor/   edit/play state machine, cameras, picking, panels
   main.odin loop ownership and mode routing
-examples/   hello, pong, invaders, terrain3d
+examples/   hello, pong, invaders, asteroids, nightfall, orbit, pacman, balatro, terrain3d
 ```

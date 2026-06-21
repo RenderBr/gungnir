@@ -17,12 +17,22 @@ g_ctx: runtime.Context
 RELOAD_POLL_INTERVAL :: 0.25
 TOAST_DURATION :: 2.0
 
+// Clears game-local modules from package.loaded so require() re-reads changed
+// files on soft reload. Standard library entries are preserved.
+@(private)
+CLEAR_PACKAGE_LOADED :: `
+local _keep = { _G = true, package = true, coroutine = true, table = true, io = true, os = true, math = true, utf8 = true, debug = true }
+for k in pairs(package.loaded) do
+	if not _keep[k] then package.loaded[k] = nil end
+end
+`
+
 Script :: struct {
 	L:          ^lua.State,
 	main_path:  string, // owned
 	broken:     bool,
 	last_error: string, // owned
-	last_mtime: time.Time,
+	last_mtime: i64, // newest .lua mtime in game dir (unix ns); 0 = unreadable
 	poll_timer: f32,
 	toast:      string, // static literal, never freed
 	toast_timer: f32,
@@ -35,7 +45,7 @@ init :: proc(s: ^Script, eng: ^engine.Engine, main_path: string, start := true) 
 	g_eng = eng
 	g_ctx = context
 	s.main_path = strings.clone(main_path)
-	s.last_mtime, _ = os.last_write_time_by_name(s.main_path)
+	s.last_mtime = scan_newest_lua_mtime(g_eng.game_dir)
 	if !start {
 		return true
 	}
@@ -69,6 +79,17 @@ start_state :: proc(s: ^Script) -> bool {
 		return false
 	}
 	lua.L_openlibs(s.L)
+
+	// Prepend <game_dir>/?.lua to package.path so require("module") finds
+	// <game_dir>/module.lua — lets games split logic across multiple files.
+	lua.getglobal(s.L, "package")
+	lua.getfield(s.L, -1, "path")
+	existing := string(lua.tostring(s.L, -1))
+	new_path := fmt.tprintf("%s/?.lua;%s", g_eng.game_dir, existing)
+	cpath := strings.clone_to_cstring(new_path, context.temp_allocator)
+	lua.pushstring(s.L, cpath)
+	lua.setfield(s.L, -3, "path")
+	lua.pop(s.L, 2)
 
 	// Traceback message handler lives permanently at stack index 1; every
 	// pcall passes errfunc=1.
@@ -112,9 +133,34 @@ run_main_file :: proc(s: ^Script) -> bool {
 soft_reload :: proc(s: ^Script) {
 	was_broken := s.broken
 	s.broken = false
+	// Clear game-local modules from package.loaded so require() re-reads
+	// changed files instead of returning the cached module.
+	lua.L_dostring(s.L, CLEAR_PACKAGE_LOADED)
 	if run_main_file(s) {
 		set_toast(s, was_broken ? "reloaded (error fixed)" : "reloaded")
 	}
+}
+
+// Scans the game directory for .lua files and returns the newest modification
+// time as unix nanoseconds. Lets hot reload detect changes in any game file,
+// not just main.lua. Returns 0 if the directory can't be read.
+@(private)
+scan_newest_lua_mtime :: proc(dir: string) -> i64 {
+	entries, err := os.read_directory_by_path(dir, -1, context.temp_allocator)
+	if err != nil {
+		return 0
+	}
+	defer os.file_info_slice_delete(entries, context.temp_allocator)
+	newest: i64
+	for fi in entries {
+		if fi.type == .Regular && strings.has_suffix(fi.name, ".lua") {
+			ns := time.to_unix_nanoseconds(fi.modification_time)
+			if ns > newest {
+				newest = ns
+			}
+		}
+	}
+	return newest
 }
 
 tick_hot_reload :: proc(s: ^Script, dt: f32) {
@@ -127,8 +173,8 @@ tick_hot_reload :: proc(s: ^Script, dt: f32) {
 		return
 	}
 	s.poll_timer = 0
-	mtime, err := os.last_write_time_by_name(s.main_path)
-	if err == nil && mtime != s.last_mtime {
+	mtime := scan_newest_lua_mtime(g_eng.game_dir)
+	if mtime != 0 && mtime != s.last_mtime {
 		s.last_mtime = mtime
 		soft_reload(s)
 	}

@@ -13,6 +13,27 @@ Colors are 0–255 RGB(A); hex colors are `"#rrggbb"` or `"#rrggbbaa"` strings.
 | `on_draw_3d()` | 3D world space (camera 3D applies) |
 | `on_gui()` | screen space, drawn last |
 
+## Modules
+
+Your game directory is on `package.path`, so `require("foo")` loads
+`<game_dir>/foo.lua`. Split large games across files freely:
+
+```lua
+-- jokers.lua
+local M = {}
+function M.list() return {"joker_a", "joker_b"} end
+return M
+
+-- main.lua
+local jokers = require("jokers")
+function on_init() print(jokers.list()) end
+```
+
+With `--hot`, saving **any** `.lua` file in the game directory triggers a
+reload — not just `main.lua`. Required modules are cleared from
+`package.loaded` on reload, so edits to `jokers.lua` are picked up without
+restarting.
+
 ## Entities
 
 | Function | Notes |
