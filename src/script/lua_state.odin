@@ -26,6 +26,7 @@ Script :: struct {
 	poll_timer: f32,
 	toast:      string, // static literal, never freed
 	toast_timer: f32,
+	hot_reload: bool, // file-watching reload; enabled by --hot
 }
 
 // start=false defers the first script run (editor mode starts paused; the
@@ -118,6 +119,9 @@ soft_reload :: proc(s: ^Script) {
 
 tick_hot_reload :: proc(s: ^Script, dt: f32) {
 	s.toast_timer = max(0, s.toast_timer - dt)
+	if !s.hot_reload {
+		return
+	}
 	s.poll_timer += dt
 	if s.L == nil || s.poll_timer < RELOAD_POLL_INTERVAL {
 		return

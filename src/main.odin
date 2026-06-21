@@ -14,6 +14,7 @@ main :: proc() {
 	shot_path: string // dev flag: screenshot after ~1s, then exit
 	editor_flag := false
 	view3d_flag := false
+	hot_flag := false
 	for arg in os.args[1:] {
 		if strings.has_prefix(arg, "--shot=") {
 			shot_path = strings.trim_prefix(arg, "--shot=")
@@ -21,6 +22,8 @@ main :: proc() {
 			editor_flag = true
 		} else if arg == "--3d" {
 			view3d_flag = true
+		} else if arg == "--hot" {
+			hot_flag = true
 		} else if !strings.has_prefix(arg, "-") {
 			game_dir = arg
 		}
@@ -48,6 +51,7 @@ main :: proc() {
 
 	scr: script.Script
 	script.init(&scr, &eng, main_lua, start = !editor_flag)
+	scr.hot_reload = hot_flag
 	defer script.destroy(&scr)
 
 	ed: editor.Editor
@@ -132,7 +136,12 @@ draw_overlay :: proc(e: ^engine.Engine, s: ^script.Script) {
 	if s.broken {
 		w, _ := engine.logical_size(e)
 		rl.DrawRectangle(0, 0, w, 40, {180, 30, 30, 230})
-		rl.DrawText("script error (fix + save to reload, cmd+r to restart)", 12, 10, 20, rl.RAYWHITE)
+		hint := "script error (cmd+r to restart)"
+		if s.hot_reload {
+			hint = "script error (fix + save to reload, cmd+r to restart)"
+		}
+		banner := strings.clone_to_cstring(hint, context.temp_allocator)
+		rl.DrawText(banner, 12, 10, 20, rl.RAYWHITE)
 
 		msg := strings.clone_to_cstring(s.last_error, context.temp_allocator)
 		rl.DrawRectangle(0, 40, w, 24 + 18 * count_lines(s.last_error), {0, 0, 0, 170})

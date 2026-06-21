@@ -6,7 +6,7 @@ A small game engine written in [Odin](https://odin-lang.org) on top of raylib �
 - **2D and 3D in one scene** — sprites, shapes, text, meshes; 2D HUD over a 3D world for free
 - **In-engine level designer** — edit, play, stop; the authored level always comes back intact
 - **Procedural assets** — generated sprites, textures, palettes, terrain, and synthesized sound effects, all from seeds; levels store recipes, not pixels
-- **Hot reload** — save your script and the running game updates; script errors show a banner instead of crashing
+- **Hot reload** — save your script and the running game updates; pass `--hot` to enable, script errors show a banner instead of crashing
 
 ## Requirements
 
@@ -18,11 +18,12 @@ A small game engine written in [Odin](https://odin-lang.org) on top of raylib �
 ## Run
 
 ```sh
-./run.sh examples/hello        # bouncing ball, edit the file while it runs
-./run.sh examples/pong         # entities, sound, score
-./run.sh examples/invaders     # every asset generated from a seed
-./run.sh examples/terrain3d    # fly over generated terrain, 2D HUD on top
-./run.sh examples/pong --editor  # open the level designer
+./run.sh examples/hello                # bouncing ball
+./run.sh examples/hello --hot          # edit the file while it runs
+./run.sh examples/pong                 # entities, sound, score
+./run.sh examples/invaders             # every asset generated from a seed
+./run.sh examples/terrain3d            # fly over generated terrain, 2D HUD on top
+./run.sh examples/pong --editor        # open the level designer
 ```
 
 On Windows use `build.bat` / `run.bat` instead:
