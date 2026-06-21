@@ -1,0 +1,36 @@
+Here are the exact timestamps for every audio slice, extracted directly from the JavaScript.
+
+The code defines the sounds using a start time and a duration in milliseconds (e.g., `2410.61` ms start, `1724.08` ms duration). I have converted these into seconds (Start Time and End Time) so you can easily plug them into an audio editor like Audacity to slice them up perfectly.
+
+### 1. Regular Sounds (`pacman10_regular.ogg` / `.mp3`)
+
+This file contains the one-shot sound effects used for events and actions.
+
+| Sound Name | Start Time | End Time | Duration |
+| --- | --- | --- | --- |
+| **death-double** (Ms. Pac-Man) | 0.000s | 1.410s | 1.410s |
+| **death** (Classic Pac-Man) | 2.410s | 4.134s | 1.724s |
+| **eating-dot-1** ("Wa") | 5.134s | 5.264s | 0.130s |
+| **eating-dot-2** ("Ka") | 6.265s | 6.395s | 0.130s |
+| **eating-dot-double** | 7.395s | 7.603s | 0.208s |
+| **eating-ghost** | 8.604s | 9.178s | 0.574s |
+| **extra-life** | 10.179s | 12.268s | 2.089s |
+| **fruit** | 13.269s | 13.765s | 0.496s |
+
+---
+
+### 2. Looped Sounds (`pacman10_looped.ogg` / `.mp3`)
+
+This file contains the background ambient noises, music, and loops.
+
+| Sound Name | Start Time | End Time | Duration |
+| --- | --- | --- | --- |
+| **ambient-1** (Siren level 1) | 0.000s | 0.402s | 0.402s |
+| **ambient-2** (Siren level 2) | 1.402s | 1.729s | 0.327s |
+| **ambient-3** (Siren level 3) | 2.729s | 3.027s | 0.298s |
+| **ambient-4** (Siren level 4) | 4.027s | 4.291s | 0.264s |
+| **ambient-eyes** (Ghost returning) | 5.292s | 5.560s | 0.268s |
+| **ambient-fright** (Power pellet) | 6.560s | 7.098s | 0.538s |
+| **cutscene** (Intermission music) | 8.099s | 13.354s | 5.255s |
+| **start-music-double** | 14.354s | 18.517s | 4.163s |
+| **start-music** (Classic intro) | 19.518s | 23.709s | 4.191s |

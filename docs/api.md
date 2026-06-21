@@ -146,7 +146,8 @@ by name everywhere a file asset would be, and saved into levels as recipes.
 | `load_level(name) -> bool` | loads `<game>/<name>.json`, replacing the scene |
 | `save_level([name]) -> bool` | writes scene + recipes to `<game>/<name>.json` |
 | `clear_scene()` | |
-| `play_sound(name [, volume, pitch])` | |
+| `play_sound(name [, volume, pitch])` | plays a sound by name (generated, or loaded via `load_sound_slice` / the `assets/<name>.wav`/`.ogg` fallback); missing name = silent no-op |
+| `load_sound_slice(name, file, start, end) -> bool` | loads `[start, end)` seconds of `assets/<file>` and registers it as `<name>`; `play_sound(name)` then plays just that slice. `false` = missing/undecodable file or bad range; a failed slice never crashes |
 | `set_clear_color(r, g, b)` | background |
 | `set_crt(on)` | arcade CRT filter: curvature, scanlines, grille, glow; renders at 960x600 and upscales |
 | `set_entity_shader(id, name)` | draw this entity through a custom shader; `nil`/`""` restores default |

@@ -12,6 +12,7 @@ register_misc :: proc(L: ^lua.State) {
 	reg(L, "srand", l_srand)
 	reg(L, "quit", l_quit)
 	reg(L, "play_sound", l_play_sound)
+	reg(L, "load_sound_slice", l_load_sound_slice)
 	reg(L, "clear_scene", l_clear_scene)
 	reg(L, "load_level", l_load_level)
 	reg(L, "save_level", l_save_level)
@@ -122,6 +123,21 @@ l_play_sound :: proc "c" (L: ^lua.State) -> c.int {
 		rl.PlaySound(snd)
 	}
 	return 0
+}
+
+// load_sound_slice(name, file, start, end) -> ok
+// Loads [start,end) seconds of assets/<file> and registers it as <name>, so
+// play_sound(name) plays the slice. false = missing/undecodable file or bad
+// range; play_sound on a failed slice is a silent no-op.
+l_load_sound_slice :: proc "c" (L: ^lua.State) -> c.int {
+	name := lua.L_checkstring(L, 1)
+	file := lua.L_checkstring(L, 2)
+	start := f32(lua.L_checknumber(L, 3))
+	end := f32(lua.L_checknumber(L, 4))
+	context = g_ctx
+	ok := engine.load_sound_slice(g_eng, string(name), string(file), start, end)
+	lua.pushboolean(L, b32(ok))
+	return 1
 }
 
 l_clear_scene :: proc "c" (L: ^lua.State) -> c.int {

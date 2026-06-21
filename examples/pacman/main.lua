@@ -5,6 +5,13 @@ COLS, ROWS = 28, 31
 OX = (960 - COLS * T) / 2
 OY = (600 - ROWS * T) / 2
 
+-- arcade audio slice durations (see assets/pacman_slices.txt)
+AMBIENT_DUR = { 0.402, 0.327, 0.298, 0.264 } -- siren levels 1..4
+FRIGHT_DUR  = 0.538
+EYES_DUR    = 0.268
+START_DUR   = 4.191
+CUTSCENE_DUR = 5.255
+
 MAZE = {
   "############################",
   "#............##............#",
@@ -191,11 +198,19 @@ function on_init()
   set_fullscreen(true)
   set_crt(true)
 
-  gen_sound("waka1", { wave = "triangle", freq = 420, slide = -260, len = 0.07, vol = 0.30 })
-  gen_sound("waka2", { wave = "triangle", freq = 300, slide = 260, len = 0.07, vol = 0.30 })
-  gen_sound("power", { wave = "square", freq = 180, slide = 480, len = 0.35, vol = 0.4 })
-  gen_sound("eatghost", { wave = "square", freq = 520, slide = 900, len = 0.25, vol = 0.45 })
-  gen_sound("death", { wave = "saw", freq = 640, slide = -520, len = 1.1, vol = 0.45 })
+  -- real arcade audio: slices of assets/pacman10_*.ogg (see pacman_slices.txt)
+  load_sound_slice("waka1",    "pacman10_regular.ogg", 5.134, 5.264)
+  load_sound_slice("waka2",    "pacman10_regular.ogg", 6.265, 6.395)
+  load_sound_slice("eatghost", "pacman10_regular.ogg", 8.604, 9.178)
+  load_sound_slice("death",    "pacman10_regular.ogg", 2.410, 4.134)
+  load_sound_slice("start",    "pacman10_looped.ogg",  19.518, 23.709)
+  load_sound_slice("cutscene", "pacman10_looped.ogg",  8.099, 13.354)
+  load_sound_slice("ambient1", "pacman10_looped.ogg",  0.000, 0.402)
+  load_sound_slice("ambient2", "pacman10_looped.ogg",  1.402, 1.729)
+  load_sound_slice("ambient3", "pacman10_looped.ogg",  2.729, 3.027)
+  load_sound_slice("ambient4", "pacman10_looped.ogg",  4.027, 4.291)
+  load_sound_slice("fright",   "pacman10_looped.ogg",  6.560, 7.098)
+  load_sound_slice("eyes",     "pacman10_looped.ogg",  5.292, 5.560)
 
   walls, power_ids = {}, {}
   for ty = 0, ROWS - 1 do
@@ -242,7 +257,7 @@ function on_init()
   spawn_pellets()
   reset_positions(true)
   sync_actors()
-  enter_ready()
+  enter_ready(true)
 end
 
 function spawn_pellets()
@@ -290,16 +305,18 @@ function reset_positions(first)
   mode, mode_timer = "scatter", 7
   fright_timer, combo, chomp = 0, 0, 0
   blink_t = 0
+  siren_timer = 0
 end
 
 -- ---------------------------------------------------------------- states
 
-function enter_ready()
-  state, state_timer = "ready", 2
+function enter_ready(jingle)
+  state, state_timer = "ready", jingle and START_DUR or 2
   if ready_label then despawn(ready_label) end
   ready_label = spawn_text("READY!", px(11.6), py(16.8), 22)
   set_tint(ready_label, 255, 255, 0)
   refresh_lives()
+  if jingle then play_sound("start") end
 end
 
 function refresh_lives()
@@ -507,12 +524,12 @@ function on_update(dt)
     return
   elseif state == "clear" then
     state_timer = state_timer - dt
-    local flash = math.floor(state_timer * 4) % 2 == 0
+    local flashing = state_timer > CUTSCENE_DUR - 1.5
+    local flash = flashing and math.floor(state_timer * 4) % 2 == 0
     for _, id in ipairs(walls) do
       set_tint(id, flash and 222 or 28, flash and 222 or 28, flash and 255 or 160)
     end
     if state_timer <= 0 then
-      for _, id in ipairs(walls) do set_tint(id, 28, 28, 160) end
       level = level + 1
       set_text(level_label, "level " .. level)
       spawn_pellets()
@@ -532,12 +549,27 @@ function on_update(dt)
       spawn_pellets()
       reset_positions(true)
       sync_actors()
-      enter_ready()
+      enter_ready(true)
     end
     return
   end
 
   -- play
+  -- background siren: eyes > fright > level siren, replayed on a timer
+  siren_timer = siren_timer - dt
+  if siren_timer <= 0 then
+    local any_eyes = false
+    for _, g in ipairs(ghosts) do if g.state == "eyes" then any_eyes = true end end
+    if any_eyes then
+      play_sound("eyes", 0.6); siren_timer = EYES_DUR
+    elseif fright_timer > 0 then
+      play_sound("fright", 0.6); siren_timer = FRIGHT_DUR
+    else
+      local i = math.min(level, 4)
+      play_sound("ambient" .. i, 0.6); siren_timer = AMBIENT_DUR[i]
+    end
+  end
+
   if pac.wdx == -pac.dx and pac.wdy == -pac.dy and (pac.dx ~= 0 or pac.dy ~= 0) then
     pac.dx, pac.dy = pac.wdx, pac.wdy -- reverse anywhere
   end
@@ -553,11 +585,12 @@ function on_update(dt)
     pellets[key] = nil
     pellet_count = pellet_count - 1
     chomp = chomp + 1
-    play_sound(chomp % 2 == 0 and "waka1" or "waka2")
+    play_sound(chomp % 2 == 0 and "waka1" or "waka2", 0.5)
     if pe.power then
       add_score(50)
       fright_timer, combo = 6.5, 0
-      play_sound("power")
+      play_sound("fright", 0.6)
+      siren_timer = FRIGHT_DUR
       for _, g in ipairs(ghosts) do
         if g.state == "normal" then
           g.state = "fright"
@@ -568,7 +601,8 @@ function on_update(dt)
       add_score(10)
     end
     if pellet_count == 0 then
-      state, state_timer = "clear", 1.6
+      state, state_timer = "clear", CUTSCENE_DUR
+      play_sound("cutscene")
       return
     end
   end
@@ -580,6 +614,7 @@ function on_update(dt)
       for _, g in ipairs(ghosts) do
         if g.state == "fright" then g.state = "normal" end
       end
+      siren_timer = 0
     end
   else
     mode_timer = mode_timer - dt

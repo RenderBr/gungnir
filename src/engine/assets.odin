@@ -1,5 +1,6 @@
 package engine
 
+import "core:c"
 import "core:fmt"
 import "core:os"
 import "core:strings"
@@ -128,6 +129,36 @@ get_sound :: proc(e: ^Engine, name: string) -> (rl.Sound, bool) {
 		}
 	}
 	return {}, false
+}
+
+// Loads [start, end) seconds of <game_dir>/assets/<file> into a Sound and
+// registers it under `name`, so play_sound(name) plays just that slice.
+// Returns false on missing file, decode failure, or an empty/inverted range;
+// play_sound on an unregistered name is a silent no-op, so a failed slice
+// never crashes the game.
+load_sound_slice :: proc(e: ^Engine, name, file: string, start, end: f32) -> bool {
+	path := fmt.tprintf("%s/assets/%s", e.game_dir, file)
+	if !os.exists(path) {
+		return false
+	}
+	wave := rl.LoadWave(strings.clone_to_cstring(path, context.temp_allocator))
+	if wave.frameCount == 0 {
+		return false
+	}
+	defer rl.UnloadWave(wave)
+
+	init_frame := c.int(max(start * f32(wave.sampleRate), 0))
+	final_frame := c.int(clamp(end * f32(wave.sampleRate), 0, f32(wave.frameCount)))
+	if final_frame <= init_frame {
+		return false
+	}
+	rl.WaveCrop(&wave, init_frame, final_frame)
+	snd := rl.LoadSoundFromWave(wave)
+	if !rl.IsSoundValid(snd) {
+		return false
+	}
+	register_sound(e, name, snd)
+	return true
 }
 
 get_model :: proc(e: ^Engine, name: string) -> (rl.Model, bool) {
