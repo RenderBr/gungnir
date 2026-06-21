@@ -4,6 +4,7 @@ import "core:c"
 import "core:fmt"
 import "core:os"
 import "core:strings"
+import "core:time"
 import rl "vendor:raylib"
 import rlgl "vendor:raylib/rlgl"
 
@@ -11,12 +12,13 @@ import rlgl "vendor:raylib/rlgl"
 // files, and the editor reference everything by plain name. Lookup falls
 // back to <game_dir>/assets/<name>.<ext> on miss.
 Assets :: struct {
-	textures: map[string]rl.Texture2D,
-	sounds:   map[string]rl.Sound,
-	models:   map[string]rl.Model,
-	shaders:  map[string]ShaderAsset,
-	recipes:  map[string]GenRecipe, // keyed by recipe.name (map owns via recipe)
-	missing:  rl.Texture2D, // magenta checker placeholder
+	textures:    map[string]rl.Texture2D,
+	sounds:      map[string]rl.Sound,
+	models:      map[string]rl.Model,
+	shaders:     map[string]ShaderAsset,
+	recipes:     map[string]GenRecipe, // keyed by recipe.name (map owns via recipe)
+	missing:     rl.Texture2D, // magenta checker placeholder
+	asset_mtimes: map[string]i64, // file mtime (unix ns) per registered asset
 }
 
 // Compiled fragment shader + cached uniform locations. 'time'/'resolution'
@@ -37,6 +39,7 @@ shader_asset_free :: proc(sa: ^ShaderAsset) {
 }
 
 assets_init :: proc(a: ^Assets) {
+	a.asset_mtimes = make(map[string]i64)
 	img := rl.GenImageChecked(32, 32, 8, 8, rl.MAGENTA, rl.BLACK)
 	defer rl.UnloadImage(img)
 	a.missing = rl.LoadTextureFromImage(img)
@@ -67,6 +70,7 @@ assets_destroy :: proc(a: ^Assets) {
 	delete(a.textures)
 	delete(a.sounds)
 	delete(a.models)
+	delete(a.asset_mtimes)
 	rl.UnloadTexture(a.missing)
 }
 
@@ -103,12 +107,17 @@ get_texture :: proc(e: ^Engine, name: string) -> rl.Texture2D {
 	if tex, ok := e.assets.textures[name]; ok {
 		return tex
 	}
-	path := fmt.tprintf("%s/assets/%s.png", e.game_dir, name)
-	if os.exists(path) {
-		tex := rl.LoadTexture(strings.clone_to_cstring(path, context.temp_allocator))
-		if tex.id != 0 {
-			e.assets.textures[strings.clone(name)] = tex
-			return tex
+	for ext in ([]string{"png", "jpg"}) {
+		path := fmt.tprintf("%s/assets/%s.%s", e.game_dir, name, ext)
+		if os.exists(path) {
+			tex := rl.LoadTexture(strings.clone_to_cstring(path, context.temp_allocator))
+			if tex.id != 0 {
+				e.assets.textures[strings.clone(name)] = tex
+				if info, err := os.stat(path, context.temp_allocator); err == nil {
+					e.assets.asset_mtimes[strings.clone(name)] = time.to_unix_nanoseconds(info.modification_time)
+				}
+				return tex
+			}
 		}
 	}
 	return e.assets.missing
@@ -124,6 +133,9 @@ get_sound :: proc(e: ^Engine, name: string) -> (rl.Sound, bool) {
 			snd := rl.LoadSound(strings.clone_to_cstring(path, context.temp_allocator))
 			if rl.IsSoundValid(snd) {
 				e.assets.sounds[strings.clone(name)] = snd
+				if info, err := os.stat(path, context.temp_allocator); err == nil {
+					e.assets.asset_mtimes[strings.clone(name)] = time.to_unix_nanoseconds(info.modification_time)
+				}
 				return snd, true
 			}
 		}
@@ -261,4 +273,73 @@ set_shader_param :: proc(e: ^Engine, shader_name, param: string, vals: []f32) ->
 	}
 	rl.SetShaderValue(sa.shader, rl.ShaderLocationIndex(loc), raw_data(vals), kind)
 	return true
+}
+
+// Scans the assets/ directory and returns the newest mtime (unix ns).
+// Returns 0 if the directory is missing or unreadable.
+scan_assets_mtime :: proc(e: ^Engine) -> i64 {
+	dir := fmt.tprintf("%s/assets", e.game_dir)
+	entries, err := os.read_directory_by_path(dir, -1, context.temp_allocator)
+	if err != nil {
+		return 0
+	}
+	defer os.file_info_slice_delete(entries, context.temp_allocator)
+	newest: i64
+	for fi in entries {
+		if fi.type == .Regular {
+			ns := time.to_unix_nanoseconds(fi.modification_time)
+			if ns > newest {
+				newest = ns
+			}
+		}
+	}
+	return newest
+}
+
+// Reloads textures and sounds from disk if their source files changed.
+// Only re-reads assets already in the registry — avoids loading random files.
+reload_assets :: proc(e: ^Engine) {
+	dir := fmt.tprintf("%s/assets", e.game_dir)
+	for name, &tex in e.assets.textures {
+		old_mtime := e.assets.asset_mtimes[name]
+		for ext in ([]string{"png", "jpg"}) {
+			path := fmt.tprintf("%s/%s.%s", dir, name, ext)
+			if os.exists(path) {
+				if info, err := os.stat(path, context.temp_allocator); err == nil {
+					cur_mtime := time.to_unix_nanoseconds(info.modification_time)
+					if cur_mtime > old_mtime {
+						loaded := rl.LoadTexture(strings.clone_to_cstring(path, context.temp_allocator))
+						if loaded.id != 0 {
+							rl.UnloadTexture(tex)
+							e.assets.textures[name] = loaded
+							e.assets.asset_mtimes[name] = cur_mtime
+							fmt.println("[assets] reloaded texture:", name)
+						}
+					}
+				}
+				break
+			}
+		}
+	}
+	for name, &snd in e.assets.sounds {
+		old_mtime := e.assets.asset_mtimes[name]
+		for ext in ([]string{"wav", "ogg"}) {
+			path := fmt.tprintf("%s/%s.%s", dir, name, ext)
+			if os.exists(path) {
+				if info, err := os.stat(path, context.temp_allocator); err == nil {
+					cur_mtime := time.to_unix_nanoseconds(info.modification_time)
+					if cur_mtime > old_mtime {
+						loaded := rl.LoadSound(strings.clone_to_cstring(path, context.temp_allocator))
+						if rl.IsSoundValid(loaded) {
+							rl.UnloadSound(snd)
+							e.assets.sounds[name] = loaded
+							e.assets.asset_mtimes[name] = cur_mtime
+							fmt.println("[assets] reloaded sound:", name)
+						}
+					}
+				}
+				break
+			}
+		}
+	}
 }

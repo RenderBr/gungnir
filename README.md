@@ -77,6 +77,10 @@ See [docs/api.md](docs/api.md) for the full API reference.
 
 - **cmd+R** full restart (fresh scene + script state)
 - **F1** open the editor over the running game
+- **F3** toggle FPS / entity count / time scale overlay
+- **F5** step one frame (while paused)
+- **F6** unpause
+- **`** toggle in-engine console (last 8 log entries + errors)
 
 ## Layout
 

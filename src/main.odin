@@ -26,6 +26,9 @@ main :: proc() {
 			hot_flag = true
 		} else if !strings.has_prefix(arg, "-") {
 			game_dir = arg
+		} else {
+			// Unknown flag — pass through to Lua get_args()
+			append(&script.Args, arg)
 		}
 	}
 	main_lua, _ := filepath.join({game_dir, "main.lua"})
@@ -62,15 +65,33 @@ main :: proc() {
 	frame := 0
 	for !rl.WindowShouldClose() && !eng.should_quit {
 		frame += 1
-		dt := min(rl.GetFrameTime(), 0.1)
+		raw_dt := min(rl.GetFrameTime(), 0.1)
 		editing := ed.enabled && !ed.playing
 		running := !editing
 		eng.postfx.bypass = ed.enabled // CRT filter is for games, not the editor
 
+		// Global keybinds (run in both edit and play mode)
+		if rl.IsKeyPressed(.GRAVE) {
+			script.toggle_console(&scr, hot_flag)
+		}
+		if rl.IsKeyPressed(.F3) {
+			scr.debug_visible = !scr.debug_visible
+		}
+		if rl.IsKeyPressed(.F5) && running {
+			scr.step_count = 1
+		}
+		if rl.IsKeyPressed(.F6) && running {
+			scr.time_scale = scr.prev_time_scale
+			scr.paused = false
+		}
+
 		if editing {
-			editor.update(&ed, &eng, dt)
+			editor.update(&ed, &eng, raw_dt)
 		} else {
-			script.tick_hot_reload(&scr, dt)
+			script.tick_hot_reload(&scr, raw_dt)
+			if hot_flag && rl.IsKeyPressed(.R) {
+				script.soft_reload(&scr)
+			}
 			if restart_requested() {
 				script.restart(&scr)
 			}
@@ -78,7 +99,13 @@ main :: proc() {
 				ed.enabled = true // editor over a running game; Stop pauses it
 				ed.playing = true
 			}
-			script.call_update(&scr, dt)
+			// Time scale + pause + frame stepping
+			if scr.paused && scr.step_count > 0 {
+				scr.step_count -= 1
+				script.call_update(&scr, raw_dt)
+			} else if !scr.paused && scr.time_scale > 0 {
+				script.call_update(&scr, raw_dt * scr.time_scale)
+			}
 		}
 
 		engine.lighting_render_lightmap(&eng, editing ? ed.cam : eng.cam2d)
@@ -113,10 +140,12 @@ main :: proc() {
 		if running {
 			script.call_gui(&scr)
 		}
+		script.draw_console(&eng, &scr)
 		if ed.enabled {
 			editor.draw_panels(&ed, &eng, &scr)
 		}
 		draw_overlay(&eng, &scr)
+		script.draw_debug_overlay(&eng, &scr, ed.enabled)
 		engine.end_frame(&eng)
 
 		if shot_path != "" && frame == 60 {

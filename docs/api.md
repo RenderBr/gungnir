@@ -8,10 +8,11 @@ Colors are 0–255 RGB(A); hex colors are `"#rrggbb"` or `"#rrggbbaa"` strings.
 | Callback | When |
 |---|---|
 | `on_init()` | once at start (and on restart / editor Play) |
-| `on_update(dt)` | every frame; `dt` in seconds |
+| `on_update(dt)` | every frame; `dt` in seconds (scaled by time_scale) |
 | `on_draw()` | 2D world space (camera applies) |
 | `on_draw_3d()` | 3D world space (camera 3D applies) |
 | `on_gui()` | screen space, drawn last |
+| `on_reload()` | after a successful hot reload (with `--hot`); re-gen textures, restore state that didn't survive |
 
 ## Modules
 
@@ -33,6 +34,10 @@ With `--hot`, saving **any** `.lua` file in the game directory triggers a
 reload — not just `main.lua`. Required modules are cleared from
 `package.loaded` on reload, so edits to `jokers.lua` are picked up without
 restarting.
+
+With `--hot`, saving `.png`/`.wav`/`.ogg` files in `assets/` also
+hot-reloads them — already-loaded textures and sounds are re-read from
+disk. Edit a sprite in Aseprite, save, and see it live.
 
 ## Entities
 
@@ -184,8 +189,48 @@ by name everywhere a file asset would be, and saved into levels as recipes.
 | `set_shader_param(shader, param, x [,y,z,w])` | set a uniform: 1 number = float, 2 = vec2, 3 = vec3, 4 = vec4 |
 | `set_fullscreen(on)` | borderless fullscreen |
 | `set_maximized(on)` | maximize window (keeps title bar, unlike fullscreen) |
-| `log(...)` | print to console |
+| `log(...)` | print to console (also goes to the in-engine console overlay) |
 | `quit()` | |
+
+## Time scale & pause
+
+| Function | Notes |
+|---|---|
+| `set_time_scale(n)` | game speed multiplier; `0` = pause, `0.25` = quarter speed, `1` = normal. Setting to non-zero while paused unpauses |
+| `get_time_scale() -> n` | returns current time scale |
+| `pause()` | freeze the game (`time_scale = 0`) |
+| `step()` | advance exactly one frame while paused, then pause again |
+
+`on_update(dt)` receives `dt * time_scale` when not paused. When paused,
+only `step()` advances the game. Use F5 to step and F6 to unpause at the
+keyboard.
+
+## Console overlay
+
+| Function | Notes |
+|---|---|
+| `console_log(msg [, level])` | append to the in-engine console; level: `"info"` (default), `"warn"`, `"error"` |
+| `console_dump() -> {entry, ...}` | returns the full log as an array of `{message=, level=}` tables |
+
+Toggle the console with **`** (backtick). The last 8 log entries are
+shown in a dark panel at the bottom of the screen. `console_log` also
+appears in the console overlay, so you can see `log()` output without a
+terminal window.
+
+## Args passthrough
+
+| Function | Notes |
+|---|---|
+| `get_args() -> {arg1, ...}` | command-line args passed after `--` (e.g. `game -- --seed=42` → `{"--seed=42"}`) |
+
+Unrecognized CLI flags (`--anything`) are also captured and available via
+`get_args()`, so games can read config from the command line without
+engine changes.
+
+## Debug overlay
+
+Press **F3** to toggle FPS, entity count, and time scale on screen.
+Shows `"PAUSED"` when the game is frozen, with F5/F6 hints.
 
 ## Custom shaders
 

@@ -4,9 +4,13 @@ import "core:c"
 import "core:fmt"
 import "core:math"
 import "core:math/rand"
+import "core:strings"
 import lua "vendor:lua/5.4"
 import rl "vendor:raylib"
 import "../engine"
+
+// Command-line args to expose via get_args(). Populated from main.odin.
+Args: [dynamic]string
 
 register_misc :: proc(L: ^lua.State) {
 	reg(L, "rand", l_rand)
@@ -27,6 +31,11 @@ register_misc :: proc(L: ^lua.State) {
 	reg(L, "set_maximized", l_set_maximized)
 	reg(L, "set_lighting", l_set_lighting)
 	reg(L, "set_ambient", l_set_ambient)
+	reg(L, "set_time_scale", l_set_time_scale)
+	reg(L, "get_time_scale", l_get_time_scale)
+	reg(L, "pause", l_pause)
+	reg(L, "step", l_step)
+	reg(L, "get_args", l_get_args)
 }
 
 // set_lighting(on) — 2D lightmap over the world + per-model lit 3D shading.
@@ -254,5 +263,101 @@ l_rect_hit :: proc "c" (L: ^lua.State) -> c.int {
 	w := arg_f32(L, 3) * 0.5
 	h := arg_f32(L, 4) * 0.5
 	lua.pushboolean(L, b32(math.abs(ax - bx) < w && math.abs(ay - by) < h))
+	return 1
+}
+
+// -- time scale / pause / step ------------------------------------------------
+
+// set_time_scale(n) — game speed multiplier. 0 = pause, 0.25 = quarter speed,
+// 1 = normal. Restores previous speed when set to non-zero while paused.
+l_set_time_scale :: proc "c" (L: ^lua.State) -> c.int {
+	n := f32(lua.L_checknumber(L, 1))
+	context = g_ctx
+	if n == 0 {
+		g_scr.paused = true
+		g_scr.prev_time_scale = g_scr.time_scale
+		g_scr.time_scale = 0
+	} else {
+		g_scr.time_scale = n
+		g_scr.paused = false
+	}
+	return 0
+}
+
+// get_time_scale() -> n
+l_get_time_scale :: proc "c" (L: ^lua.State) -> c.int {
+	lua.pushnumber(L, lua.Number(g_scr.time_scale))
+	return 1
+}
+
+// pause() — freeze the game (time_scale = 0). Use step() to advance one frame.
+l_pause :: proc "c" (L: ^lua.State) -> c.int {
+	context = g_ctx
+	g_scr.paused = true
+	g_scr.prev_time_scale = g_scr.time_scale
+	g_scr.time_scale = 0
+	return 0
+}
+
+// step() — advance one frame while paused, then pause again.
+l_step :: proc "c" (L: ^lua.State) -> c.int {
+	context = g_ctx
+	g_scr.step_count = 1
+	return 0
+}
+
+// get_args() -> {arg0, arg1, ...} — command-line args passed after the game dir.
+l_get_args :: proc "c" (L: ^lua.State) -> c.int {
+	context = g_ctx
+	n := len(Args)
+	lua.createtable(L, c.int(n), 0)
+	for i in 0 ..< n {
+		arg := Args[i]
+		lua.pushlstring(L, strings.clone_to_cstring(arg, context.temp_allocator), uint(len(arg)))
+		lua.rawseti(L, -2, lua.Integer(i + 1))
+	}
+	return 1
+}
+
+// -- console ------------------------------------------------------------------
+
+register_console :: proc(L: ^lua.State) {
+	reg(L, "console_log", l_console_log)
+	reg(L, "console_dump", l_console_dump)
+}
+
+// console_log(message [, level]) — append to the in-engine console overlay.
+// level: "info" (default), "warn", "error".
+l_console_log :: proc "c" (L: ^lua.State) -> c.int {
+	msg := lua.L_checkstring(L, 1)
+	level := lua.L_optstring(L, 2, "info")
+	context = g_ctx
+	console_push(string(msg), string(level))
+	return 0
+}
+
+// console_dump() -> {entry, ...} — returns the full console log as an array
+// of {message=, level=} tables. Useful for saving debug output.
+l_console_dump :: proc "c" (L: ^lua.State) -> c.int {
+	context = g_ctx
+	n := console_count
+	lua.createtable(L, c.int(n), 0)
+	start := (console_head - n) %% CONSOLE_MAX
+	for i in 0 ..< n {
+		idx := (start + i) %% CONSOLE_MAX
+		entry := console_log[idx]
+
+		lua.createtable(L, 0, 2)
+
+		msg := strings.clone_to_cstring(entry.message, context.temp_allocator)
+		lua.pushlstring(L, msg, uint(len(entry.message)))
+		lua.setfield(L, -2, "message")
+
+		lvl := strings.clone_to_cstring(entry.level, context.temp_allocator)
+		lua.pushlstring(L, lvl, uint(len(entry.level)))
+		lua.setfield(L, -2, "level")
+
+		lua.rawseti(L, -2, lua.Integer(i + 1))
+	}
 	return 1
 }

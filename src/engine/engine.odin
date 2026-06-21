@@ -3,16 +3,17 @@ package engine
 import rl "vendor:raylib"
 
 Engine :: struct {
-	game_dir:    string,
-	should_quit: bool,
-	clear_color: rl.Color,
-	draw_color:  rl.Color,
-	cam2d:       rl.Camera2D,
-	cam3d:       rl.Camera3D,
-	scene:       Scene,
-	assets:      Assets,
-	postfx:      Postfx,
-	lighting:    Lighting,
+	game_dir:     string,
+	should_quit:  bool,
+	clear_color:  rl.Color,
+	draw_color:   rl.Color,
+	cam2d:        rl.Camera2D,
+	cam3d:        rl.Camera3D,
+	scene:        Scene,
+	assets:       Assets,
+	postfx:       Postfx,
+	lighting:     Lighting,
+	assets_mtime: i64, // newest asset file mtime (unix ns) for hot reload
 }
 
 // Requires an open window (textures need a GL context) and audio device.

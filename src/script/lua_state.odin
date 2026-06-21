@@ -13,6 +13,7 @@ import "../engine"
 // Set once in init(); g_ctx carries the real allocator/logger into callbacks.
 g_eng: ^engine.Engine
 g_ctx: runtime.Context
+g_scr: ^Script
 
 RELOAD_POLL_INTERVAL :: 0.25
 TOAST_DURATION :: 2.0
@@ -37,6 +38,12 @@ Script :: struct {
 	toast:      string, // static literal, never freed
 	toast_timer: f32,
 	hot_reload: bool, // file-watching reload; enabled by --hot
+	time_scale: f32, // game speed multiplier; 0 = paused
+	paused:     bool,
+	prev_time_scale: f32, // saved before pause for restore
+	step_count: i32, // frames to advance while paused
+	console_visible: bool,
+	debug_visible:   bool, // F3 toggle: FPS + entity count
 }
 
 // start=false defers the first script run (editor mode starts paused; the
@@ -44,6 +51,9 @@ Script :: struct {
 init :: proc(s: ^Script, eng: ^engine.Engine, main_path: string, start := true) -> bool {
 	g_eng = eng
 	g_ctx = context
+	g_scr = s
+	s.time_scale = 1.0
+	s.prev_time_scale = 1.0
 	s.main_path = strings.clone(main_path)
 	s.last_mtime = scan_newest_lua_mtime(g_eng.game_dir)
 	if !start {
@@ -138,6 +148,7 @@ soft_reload :: proc(s: ^Script) {
 	lua.L_dostring(s.L, CLEAR_PACKAGE_LOADED)
 	if run_main_file(s) {
 		set_toast(s, was_broken ? "reloaded (error fixed)" : "reloaded")
+		call_callback(s, "on_reload")
 	}
 }
 
@@ -173,10 +184,17 @@ tick_hot_reload :: proc(s: ^Script, dt: f32) {
 		return
 	}
 	s.poll_timer = 0
+	// Check for Lua file changes
 	mtime := scan_newest_lua_mtime(g_eng.game_dir)
 	if mtime != 0 && mtime != s.last_mtime {
 		s.last_mtime = mtime
 		soft_reload(s)
+	}
+	// Check for asset file changes
+	asset_mtime := engine.scan_assets_mtime(g_eng)
+	if asset_mtime != 0 && asset_mtime != g_eng.assets_mtime {
+		g_eng.assets_mtime = asset_mtime
+		engine.reload_assets(g_eng)
 	}
 }
 

@@ -68,6 +68,16 @@ clear_scene :: proc(s: ^Scene) {
 	clear(&s.free_slots)
 }
 
+alive_count :: proc(s: ^Scene) -> int {
+	n: int
+	for ent in s.entities {
+		if ent.alive {
+			n += 1
+		}
+	}
+	return n
+}
+
 scene_destroy :: proc(s: ^Scene) {
 	clear_scene(s)
 	delete(s.entities)
