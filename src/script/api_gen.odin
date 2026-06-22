@@ -286,8 +286,8 @@ l_gen_mesh_terrain :: proc "c" (L: ^lua.State) -> c.int {
 	return 0
 }
 
-// gen_mesh(name, kind [, a, b, c])  kind: "cube"|"sphere"|"plane"|"cylinder"
-// cube: a,b,c = w,h,d | sphere: a = radius | plane: a,b | cylinder: a=r, b=h
+// gen_mesh(name, kind [, a, b, c])  kind: "cube"|"sphere"|"plane"|"cylinder"|"torus"
+// cube: a,b,c = w,h,d | sphere: a = radius | plane: a,b | cylinder: a=r, b=h | torus: a=radius,b=tube
 l_gen_mesh :: proc "c" (L: ^lua.State) -> c.int {
 	name := lua.L_checkstring(L, 1)
 	kind := lua.L_checkstring(L, 2)

@@ -53,6 +53,7 @@ gen_terrain_model :: proc(opts: TerrainOpts) -> rl.Model {
 	mesh.triangleCount = i32(tri_count)
 	mesh.vertices = ([^]f32)(rl.MemAlloc(u32(vert_count * 3 * size_of(f32))))
 	mesh.normals = ([^]f32)(rl.MemAlloc(u32(vert_count * 3 * size_of(f32))))
+	mesh.texcoords = ([^]f32)(rl.MemAlloc(u32(vert_count * 2 * size_of(f32))))
 	mesh.colors = ([^]u8)(rl.MemAlloc(u32(vert_count * 4)))
 	mesh.indices = ([^]u16)(rl.MemAlloc(u32(tri_count * 3 * size_of(u16))))
 
@@ -67,6 +68,10 @@ gen_terrain_model :: proc(opts: TerrainOpts) -> rl.Model {
 			mesh.vertices[i * 3 + 0] = f32(x) * opts.cell - half_w
 			mesh.vertices[i * 3 + 1] = h
 			mesh.vertices[i * 3 + 2] = f32(z) * opts.cell - half_d
+			// World-scaled UVs: roughly one material tile per 12 metres.
+			// Repeat wrapping is enabled by set_model_texture().
+			mesh.texcoords[i * 2 + 0] = f32(x) * opts.cell / 12
+			mesh.texcoords[i * 2 + 1] = f32(z) * opts.cell / 12
 
 			// normal via central differences
 			hl := terrain_height(opts, f64(x) - 1, f64(z))
@@ -115,6 +120,7 @@ MeshPrimitive :: enum {
 	Sphere,
 	Plane,
 	Cylinder,
+	Torus,
 }
 
 gen_primitive_model :: proc(kind: MeshPrimitive, a, b, c: f32) -> rl.Model {
@@ -128,6 +134,8 @@ gen_primitive_model :: proc(kind: MeshPrimitive, a, b, c: f32) -> rl.Model {
 		mesh = rl.GenMeshPlane(a, b, 4, 4)
 	case .Cylinder:
 		mesh = rl.GenMeshCylinder(a, b, 16)
+	case .Torus:
+		mesh = rl.GenMeshTorus(a, b, 48, 12)
 	}
 	return rl.LoadModelFromMesh(mesh)
 }

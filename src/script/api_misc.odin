@@ -5,6 +5,7 @@ import "core:fmt"
 import "core:math"
 import "core:math/rand"
 import "core:strings"
+import "core:time"
 import lua "vendor:lua/5.4"
 import rl "vendor:raylib"
 import "../engine"
@@ -15,6 +16,7 @@ Args: [dynamic]string
 register_misc :: proc(L: ^lua.State) {
 	reg(L, "rand", l_rand)
 	reg(L, "srand", l_srand)
+	reg(L, "session_seed", l_session_seed)
 	reg(L, "quit", l_quit)
 	reg(L, "play_sound", l_play_sound)
 	reg(L, "load_sound_slice", l_load_sound_slice)
@@ -36,6 +38,16 @@ register_misc :: proc(L: ^lua.State) {
 	reg(L, "pause", l_pause)
 	reg(L, "step", l_step)
 	reg(L, "get_args", l_get_args)
+}
+
+// session_seed() -> positive integer derived from wall-clock nanoseconds.
+// Intended for run-unique procedural systems; deterministic content should
+// continue using explicit srand seeds.
+l_session_seed :: proc "c" (L: ^lua.State) -> c.int {
+	context = g_ctx
+	n := time.to_unix_nanoseconds(time.now())
+	lua.pushinteger(L, lua.Integer(u64(n) & 0x7fff_ffff))
+	return 1
 }
 
 // set_lighting(on) — 2D lightmap over the world + per-model lit 3D shading.

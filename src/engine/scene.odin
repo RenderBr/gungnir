@@ -121,4 +121,10 @@ spawn_light :: proc(s: ^Scene, x, y, z: f32) -> EntityId {
 	return spawn(s, e)
 }
 
+spawn_directional_light :: proc(s: ^Scene) -> EntityId {
+	e := entity_defaults()
+	e.variant = Light{kind = .Directional, radius = 1, intensity = 1}
+	return spawn(s, e)
+}
+
 _ :: rl

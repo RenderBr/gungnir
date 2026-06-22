@@ -27,6 +27,8 @@ Lighting :: struct {
 	loc_pos:        i32,
 	loc_color:      i32,
 	loc_radius:     i32,
+	loc_view_pos:   i32,
+	loc_fog_color:  i32,
 }
 
 lighting_enable :: proc(e: ^Engine, on: bool) {
@@ -44,6 +46,8 @@ lighting_enable :: proc(e: ^Engine, on: bool) {
 		lt.loc_pos = rl.GetShaderLocation(lt.shader3d, "lightPos")
 		lt.loc_color = rl.GetShaderLocation(lt.shader3d, "lightColor")
 		lt.loc_radius = rl.GetShaderLocation(lt.shader3d, "lightRadius")
+		lt.loc_view_pos = rl.GetShaderLocation(lt.shader3d, "viewPos")
+		lt.loc_fog_color = rl.GetShaderLocation(lt.shader3d, "fogColor")
 
 		// UnloadMaterial skips the raylib-managed default shader; only maps free.
 		tmp := rl.LoadMaterialDefault()
@@ -194,6 +198,10 @@ lighting_upload_3d :: proc(e: ^Engine) {
 	rl.SetShaderValue(lt.shader3d, rl.ShaderLocationIndex(lt.loc_count), &count, .INT)
 	amb := [3]f32{f32(lt.ambient.r) / 255, f32(lt.ambient.g) / 255, f32(lt.ambient.b) / 255}
 	rl.SetShaderValue(lt.shader3d, rl.ShaderLocationIndex(lt.loc_ambient), &amb, .VEC3)
+	view := [3]f32{e.cam3d.position.x, e.cam3d.position.y, e.cam3d.position.z}
+	fog := [3]f32{f32(e.clear_color.r) / 255, f32(e.clear_color.g) / 255, f32(e.clear_color.b) / 255}
+	rl.SetShaderValue(lt.shader3d, rl.ShaderLocationIndex(lt.loc_view_pos), &view, .VEC3)
+	rl.SetShaderValue(lt.shader3d, rl.ShaderLocationIndex(lt.loc_fog_color), &fog, .VEC3)
 	if count > 0 {
 		rl.SetShaderValueV(lt.shader3d, rl.ShaderLocationIndex(lt.loc_pos), raw_data(pos[:]), .VEC4, count)
 		rl.SetShaderValueV(lt.shader3d, rl.ShaderLocationIndex(lt.loc_color), raw_data(col[:]), .VEC3, count)
@@ -271,12 +279,28 @@ uniform vec4 lightPos[MAX_LIGHTS];   // w=1: point (xyz=pos), w=0: directional (
 uniform vec3 lightColor[MAX_LIGHTS]; // intensity premultiplied
 uniform float lightRadius[MAX_LIGHTS];
 uniform vec3 ambient;
+uniform vec3 viewPos;
+uniform vec3 fogColor;
 out vec4 finalColor;
 
 void main() {
     vec4 albedo = texture(texture0, fragTexCoord) * colDiffuse * fragColor;
     vec3 n = normalize(fragNormal);
-    vec3 light = ambient;
+    // Derive subtle micro-normal detail from the bound albedo. This is not a
+    // replacement for authored tangent-space normal maps, but it gives photo
+    // materials convincing grazing response without expanding the asset API.
+    vec2 texel = 1.0 / vec2(max(textureSize(texture0, 0), ivec2(1)));
+    float hc = dot(texture(texture0, fragTexCoord).rgb, vec3(0.299, 0.587, 0.114));
+    float hx = dot(texture(texture0, fragTexCoord + vec2(texel.x, 0.0)).rgb, vec3(0.299, 0.587, 0.114));
+    float hy = dot(texture(texture0, fragTexCoord + vec2(0.0, texel.y)).rgb, vec3(0.299, 0.587, 0.114));
+    vec3 dpdx = dFdx(fragPosition), dpdy = dFdy(fragPosition);
+    vec2 duvdx = dFdx(fragTexCoord), duvdy = dFdy(fragTexCoord);
+    vec3 T = normalize(dpdx * duvdy.y - dpdy * duvdx.y);
+    vec3 B = normalize(-dpdx * duvdy.x + dpdy * duvdx.x);
+    n = normalize(n + (hc - hx) * T * 1.35 + (hc - hy) * B * 1.35);
+    vec3 light = ambient * (0.78 + 0.22 * max(n.y, 0.0));
+    float specular = 0.0;
+    vec3 V = normalize(viewPos - fragPosition);
     for (int i = 0; i < lightCount; i++) {
         vec3 L;
         float att = 1.0;
@@ -290,7 +314,16 @@ void main() {
             L = normalize(-lightPos[i].xyz);
         }
         light += lightColor[i] * (max(dot(n, L), 0.0) * att);
+        vec3 H = normalize(L + V);
+        float gloss = pow(max(dot(n, H), 0.0), 48.0);
+        float albedoLightness = dot(albedo.rgb, vec3(0.299, 0.587, 0.114));
+        float materialGloss = smoothstep(0.52, 0.92, albedoLightness);
+        specular += gloss * att * dot(lightColor[i], vec3(0.333)) * (0.12 + materialGloss * 0.52);
     }
-    finalColor = vec4(albedo.rgb * light, albedo.a);
+    vec3 lit = albedo.rgb * light + vec3(specular);
+    float distanceToCamera = length(viewPos - fragPosition);
+    float fog = 1.0 - exp(-distanceToCamera * distanceToCamera * 0.000055);
+    lit = mix(lit, fogColor, clamp(fog, 0.0, 0.72));
+    finalColor = vec4(lit, albedo.a);
 }
 `

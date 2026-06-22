@@ -60,6 +60,7 @@ disk. Edit a sprite in Aseprite, save, and see it live.
 | `set_text(id, str)` | text entities only |
 | `set_flip(id, flip_x, flip_y)` | sprites only |
 | `set_texture(id, name)` | sprites only; swap texture (animation frames) |
+| `set_model_texture(model, texture)` | binds `assets/<texture>.png/.jpg` to a generated 3D model; enables repeat wrapping and 16x anisotropic filtering |
 
 ## GameObjects (optional layer)
 
@@ -141,6 +142,7 @@ The 2D world (and any 3D beneath it) is multiplied by ambient + lights;
 | `set_lighting(on)` | enables the lighting system (off by default) |
 | `set_ambient(r, g, b)` | base light level (default 60, 60, 75) |
 | `spawn_light(x, y [, z]) -> id` | point light; default radius 160, intensity 1 |
+| `spawn_directional_light() -> id` | sunlight-style infinite light; aim it with `set_rot` and color with `set_tint` |
 | `set_light(id, radius [, intensity])` | radius in world units; intensity 0–4 |
 
 ## Input
@@ -149,8 +151,11 @@ The 2D world (and any 3D beneath it) is multiplied by ambient + lights;
 |---|---|
 | `key_down(name)` / `key_pressed(name)` | `"a"`…`"z"`, `"0"`…`"9"`, `"up"`, `"down"`, `"left"`, `"right"`, `"space"`, `"enter"`, `"escape"`, `"tab"`, `"shift"`, `"ctrl"`, `"alt"`, `"cmd"` |
 | `mouse_pos() -> x, y` | screen coordinates |
+| `mouse_delta() -> dx, dy` | cursor delta since last frame; use with `disable_cursor` for FPS-style look |
 | `mouse_down([btn])` / `mouse_pressed([btn])` | btn `"left"` (default), `"right"`, `"middle"` |
 | `mouse_wheel() -> delta` | |
+| `disable_cursor()` | hide and lock cursor to window center |
+| `enable_cursor()` | show and unlock cursor |
 
 ## Procedural generation
 
@@ -164,11 +169,12 @@ by name everywhere a file asset would be, and saved into levels as recipes.
 | `gen_texture(name, w, h [, opts])` | opts: `kind` (`"noise"`, `"gradient"`, `"checker"`, `"circle"`), `seed`, `scale`, `cells`, `horizontal`, `color`, `color2` |
 | `gen_palette(n [, seed]) -> {hex, ...}` | |
 | `gen_sound(name [, opts])` | opts: `wave` (`"sine"`, `"square"`, `"saw"`, `"triangle"`, `"noise"`), `freq`, `slide`, `len`, `attack`, `vol`, `seed` |
-| `gen_mesh(name, kind [, a, b, c])` | `"cube"` (w,h,d), `"sphere"` (r), `"plane"` (w,d), `"cylinder"` (r,h) |
+| `gen_mesh(name, kind [, a, b, c])` | `"cube"` (w,h,d), `"sphere"` (r), `"plane"` (w,d), `"cylinder"` (r,h), `"torus"` (radius,tube) |
 | `gen_mesh_terrain(name, cells_w, cells_d [, opts])` | opts: `seed`, `cell`, `height`, `scale`, `ridged`, `colors` |
 | `gen_shader(name, code) -> ok` | compile a GLSL 330 fragment shader; `false` + console log on compile error (previous version kept) |
 | `noise(x, y [, z]) -> -1..1` | OpenSimplex2, seeded by `srand` |
 | `srand(seed)` / `rand([a [, b]])` | `rand()` → [0,1), `rand(a)` → [0,a), `rand(a,b)` → [a,b) |
+| `session_seed() -> integer` | run-unique wall-clock seed for non-repeatable procedural systems |
 
 ## Scene & misc
 

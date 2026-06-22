@@ -23,9 +23,30 @@ register_entity :: proc(L: ^lua.State) {
 	reg(L, "set_text", l_set_text)
 	reg(L, "set_flip", l_set_flip)
 	reg(L, "set_texture", l_set_texture)
+	reg(L, "set_model_texture", l_set_model_texture)
 	reg(L, "set_entity_shader", l_set_entity_shader)
 	reg(L, "spawn_light", l_spawn_light)
+	reg(L, "spawn_directional_light", l_spawn_directional_light)
 	reg(L, "set_light", l_set_light)
+}
+
+l_spawn_directional_light :: proc "c" (L: ^lua.State) -> c.int {
+	context = g_ctx
+	id := engine.spawn_directional_light(&g_eng.scene)
+	lua.pushinteger(L, lua.Integer(id))
+	return 1
+}
+
+// set_model_texture(model, texture) — binds assets/<texture>.png/.jpg to a
+// generated model and enables repeat + anisotropic filtering.
+l_set_model_texture :: proc "c" (L: ^lua.State) -> c.int {
+	model := string(lua.L_checkstring(L, 1))
+	texture := string(lua.L_checkstring(L, 2))
+	context = g_ctx
+	if !engine.set_model_texture(g_eng, model, texture) {
+		lua.L_error(L, "set_model_texture: unknown model '%s'", strings.clone_to_cstring(model, context.temp_allocator))
+	}
+	return 0
 }
 
 // spawn_light(x, y [, z]) -> id — point light; set_tint = color, set_pos moves it.

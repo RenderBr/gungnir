@@ -130,6 +130,7 @@ generate_from_recipe :: proc(e: ^Engine, r: GenRecipe) -> bool {
 		case "sphere":   kind = .Sphere
 		case "plane":    kind = .Plane
 		case "cylinder": kind = .Cylinder
+		case "torus":    kind = .Torus
 		case:            kind = .Cube
 		}
 		a := f32(param(r, "a", 1))

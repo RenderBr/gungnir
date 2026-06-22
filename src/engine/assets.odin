@@ -180,6 +180,24 @@ get_model :: proc(e: ^Engine, name: string) -> (rl.Model, bool) {
 	return {}, false
 }
 
+// Binds a file/generated texture to every material in a model. Models are
+// registry assets shared by their entities, so the binding is intentionally
+// model-wide. Repeat + anisotropic filtering are appropriate for world
+// materials and remain harmless for ordinary clamp-safe images.
+set_model_texture :: proc(e: ^Engine, model_name, texture_name: string) -> bool {
+	mdl, ok := get_model(e, model_name)
+	if !ok {
+		return false
+	}
+	tex := get_texture(e, texture_name)
+	rl.SetTextureWrap(tex, .REPEAT)
+	rl.SetTextureFilter(tex, .ANISOTROPIC_16X)
+	for i in 0 ..< mdl.materialCount {
+		rl.SetMaterialTexture(&mdl.materials[i], .ALBEDO, tex)
+	}
+	return true
+}
+
 // Compiles fs_code with raylib's default vertex shader. On compile failure
 // the previous registration (if any) is kept, so hot reload of a broken
 // shader doesn't black out the game.
