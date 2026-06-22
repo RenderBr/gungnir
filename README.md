@@ -57,7 +57,14 @@ function on_gui()
 end
 ```
 
-See [docs/api.md](docs/api.md) for the full API reference.
+## Documentation
+
+| Document | What it covers |
+|----------|---------------|
+| [docs/api.md](docs/api.md) | Full Lua API reference — all callbacks, functions, and shader contract |
+| [docs/architecture.md](docs/architecture.md) | Engine internals — packages, key types, data flow, adding features |
+| [docs/examples.md](docs/examples.md) | Example walkthroughs — what each game demonstrates, suggested learning path |
+| [AGENTS.md](AGENTS.md) | Quick reference for AI assistants — build, conventions, data flow, key types |
 
 ## Editor
 
@@ -92,4 +99,6 @@ src/
   editor/   edit/play state machine, cameras, picking, panels
   main.odin loop ownership and mode routing
 examples/   hello, pong, invaders, asteroids, nightfall, orbit, pacman, balatro, terrain3d
+presets/    built-in shader presets (crt.fs)
+docs/       API reference, architecture, examples guide
 ```
