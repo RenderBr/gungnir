@@ -27,6 +27,7 @@ register_misc :: proc(L: ^lua.State) {
 	reg(L, "load_level", l_load_level)
 	reg(L, "save_level", l_save_level)
 	reg(L, "set_crt", l_set_crt)
+	reg(L, "set_render_resolution", l_set_render_resolution)
 	reg(L, "set_screen_shader", l_set_screen_shader)
 	reg(L, "set_shader_param", l_set_shader_param)
 	reg(L, "set_fullscreen", l_set_fullscreen)
@@ -67,13 +68,19 @@ l_set_ambient :: proc "c" (L: ^lua.State) -> c.int {
 	return 0
 }
 
-// set_screen_shader(name | nil) — full-screen pass over the game image;
-// applies before the CRT filter when both are on.
+// set_screen_shader(name | nil) — full-screen shader pass over the game
+// image. name can be a user shader (registered via gen_shader) or a
+// built-in preset (loaded from presets/<name>.fs). nil clears.
 l_set_screen_shader :: proc "c" (L: ^lua.State) -> c.int {
 	name := lua.L_optstring(L, 1, "")
 	context = g_ctx
-	if string(name) != "" && !engine.has_shader(g_eng, string(name)) {
-		lua.L_error(L, "set_screen_shader: unknown shader '%s' (call gen_shader first)", name)
+	if string(name) != "" {
+		if !engine.has_shader(g_eng, string(name)) {
+			engine.postfx_load_preset(g_eng, string(name))
+		}
+		if !engine.has_shader(g_eng, string(name)) {
+			lua.L_error(L, "set_screen_shader: unknown shader '%s' (call gen_shader first)", name)
+		}
 	}
 	engine.postfx_set_screen_shader(g_eng, string(name))
 	return 0
@@ -98,12 +105,33 @@ l_set_shader_param :: proc "c" (L: ^lua.State) -> c.int {
 	return 0
 }
 
-// set_crt(on) — arcade CRT filter: curvature, scanlines, grille, glow.
-// The game renders at 960x600 and upscales, like a real cab.
+// set_crt(on) — convenience: loads the CRT preset (presets/crt.fs) and sets
+// the render resolution to 960x600 for a low-res arcade look.
 l_set_crt :: proc "c" (L: ^lua.State) -> c.int {
 	on := b32(lua.toboolean(L, 1))
 	context = g_ctx
-	engine.postfx_enable(g_eng, bool(on))
+	if bool(on) {
+		engine.postfx_load_preset(g_eng, "crt")
+		engine.postfx_set_screen_shader(g_eng, "crt")
+		engine.postfx_set_render_resolution(g_eng, 960, 600)
+	} else {
+		engine.postfx_set_screen_shader(g_eng, "")
+		engine.postfx_set_render_resolution(g_eng, 0, 0)
+	}
+	return 0
+}
+
+// set_render_resolution(w, h) — set the internal render resolution.
+// Pass 0, 0 to render at the native window size (hi-res mode).
+// Screen shaders (set_screen_shader) apply at this resolution.
+l_set_render_resolution :: proc "c" (L: ^lua.State) -> c.int {
+	w := i32(lua.L_checkinteger(L, 1))
+	h := i32(lua.L_checkinteger(L, 2))
+	context = g_ctx
+	if w < 0 || h < 0 {
+		lua.L_error(L, "set_render_resolution: dimensions must be >= 0")
+	}
+	engine.postfx_set_render_resolution(g_eng, w, h)
 	return 0
 }
 

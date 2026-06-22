@@ -57,7 +57,7 @@ local function reset_ship()
 end
 
 function on_init()
-  set_crt(true) -- arcade look; also pins the logical canvas to 960x600
+  set_crt(true) -- arcade CRT preset (presets/crt.fs) at 960x600
   W, H = screen_size()
   srand(SEED)
   set_clear_color(8, 10, 24)

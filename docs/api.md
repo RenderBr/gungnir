@@ -192,9 +192,10 @@ by name everywhere a file asset would be, and saved into levels as recipes.
 | `circle_hit(a, b, r) -> bool` | true if `a` and `b` are within `r` (circular collision). `a`/`b` accept an entity id or a `{x=,y=}` table (GameObjects work too); `r` is the sum of radii or a single radius |
 | `rect_hit(a, b, w, h) -> bool` | true if the axis-aligned rects centered on `a` and `b` overlap. `w`/`h` are full widths/heights. `a`/`b` accept entity id or `{x=,y=}` table |
 | `set_clear_color(r, g, b)` | background |
-| `set_crt(on)` | arcade CRT filter: curvature, scanlines, grille, glow; renders at 960x600 and upscales |
+| `set_crt(on)` | arcade CRT preset: curvature, scanlines, grille, glow; loads the `presets/crt.fs` shader and sets render resolution to 960x600 |
+| `set_render_resolution(w, h)` | set the internal render resolution (0, 0 = native window size for hi-res); screen shaders apply at this resolution |
 | `set_entity_shader(id, name)` | draw this entity through a custom shader; `nil`/`""` restores default |
-| `set_screen_shader(name)` | full-screen shader over the game image (960x600 canvas); runs before the CRT filter; `nil` clears |
+| `set_screen_shader(name)` | full-screen shader pass; `name` can be a user shader (`gen_shader`) or a built-in preset (`presets/<name>.fs`); `nil` clears |
 | `set_shader_param(shader, param, x [,y,z,w])` | set a uniform: 1 number = float, 2 = vec2, 3 = vec3, 4 = vec4 |
 | `set_fullscreen(on)` | borderless fullscreen |
 | `set_maximized(on)` | maximize window (keeps title bar, unlike fullscreen) |
@@ -286,6 +287,6 @@ function on_init()
   ship = spawn_sprite("ship", 480, 300)
   set_scale(ship, 6)
   set_entity_shader(ship, "cycle")   -- per-entity
-  -- set_screen_shader("cycle")      -- or whole screen; composes with set_crt(true)
+  -- set_screen_shader("cycle")      -- or whole screen shader
 end
 ```

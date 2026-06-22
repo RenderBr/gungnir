@@ -9,7 +9,7 @@ import rl "vendor:raylib"
 // artifacts. main.odin composes these; nothing else may open rl modes.
 
 begin_frame :: proc(e: ^Engine) {
-	// Latch: scripts may toggle crt/screen shader mid-frame (on_draw); the
+	// Latch: scripts may toggle the screen shader mid-frame (on_draw); the
 	// end of this frame must match how it began.
 	e.postfx.frame_active = postfx_active(e)
 	if e.postfx.frame_active {
@@ -24,24 +24,14 @@ end_frame :: proc(e: ^Engine) {
 	if e.postfx.frame_active {
 		rl.EndTextureMode()
 
-		w := f32(e.postfx.w)
-		h := f32(e.postfx.h)
-		user, has_user := get_shader(e, e.postfx.screen_shader)
-		crt := e.postfx.crt_enabled
-
-		src := e.postfx.rt
-		if has_user && crt {
-			// chain stage 1: user shader at logical resolution into rt2,
-			// so the CRT pass then warps the already-processed image.
-			rl.BeginTextureMode(e.postfx.rt2)
-			rl.ClearBackground(rl.BLACK)
-			shader_set_auto_uniforms(user, w, h)
-			rl.BeginShaderMode(user.shader)
-			rl.DrawTexturePro(src.texture, {0, 0, w, -h}, {0, 0, w, h}, {}, 0, rl.WHITE)
-			rl.EndShaderMode()
-			rl.EndTextureMode()
-			src = e.postfx.rt2
+		w := f32(e.postfx.render_w)
+		h := f32(e.postfx.render_h)
+		if w <= 0 || h <= 0 {
+			w = f32(rl.GetScreenWidth())
+			h = f32(rl.GetScreenHeight())
 		}
+
+		sa, has_shader := get_shader(e, e.postfx.screen_shader)
 
 		rl.BeginDrawing()
 		rl.ClearBackground(rl.BLACK)
@@ -52,30 +42,17 @@ end_frame :: proc(e: ^Engine) {
 		dw := w * scale
 		dh := h * scale
 
-		final: rl.Shader
-		use_final := false
-		if crt {
-			t := f32(rl.GetTime())
-			rl.SetShaderValue(e.postfx.crt_shader, rl.ShaderLocationIndex(e.postfx.crt_time_loc), &t, .FLOAT)
-			res := [2]f32{w, h}
-			rl.SetShaderValue(e.postfx.crt_shader, rl.ShaderLocationIndex(e.postfx.crt_res_loc), &res, .VEC2)
-			final = e.postfx.crt_shader
-			use_final = true
-		} else if has_user {
-			shader_set_auto_uniforms(user, w, h)
-			final = user.shader
-			use_final = true
-		}
-		if use_final {
-			rl.BeginShaderMode(final)
+		if has_shader {
+			shader_set_auto_uniforms(sa, w, h)
+			rl.BeginShaderMode(sa.shader)
 		}
 		rl.DrawTexturePro(
-			src.texture,
+			e.postfx.rt.texture,
 			{0, 0, w, -h}, // RT is vertically flipped
 			{(sw - dw) / 2, (sh - dh) / 2, dw, dh},
 			{}, 0, rl.WHITE,
 		)
-		if use_final {
+		if has_shader {
 			rl.EndShaderMode()
 		}
 	}

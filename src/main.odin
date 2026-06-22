@@ -68,7 +68,7 @@ main :: proc() {
 		raw_dt := min(rl.GetFrameTime(), 0.1)
 		editing := ed.enabled && !ed.playing
 		running := !editing
-		eng.postfx.bypass = ed.enabled // CRT filter is for games, not the editor
+		eng.postfx.bypass = ed.enabled // post-processing is for games, not the editor
 
 		// Global keybinds (run in both edit and play mode)
 		if rl.IsKeyPressed(.GRAVE) {

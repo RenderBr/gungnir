@@ -14,7 +14,7 @@
     "draw_sphere",
     "noise", "srand", "rand",
     "load_level", "save_level", "clear_scene", "play_sound", "log", "quit",
-    "set_crt", "set_fullscreen",
+    "set_crt", "set_render_resolution", "set_fullscreen",
     "GameObject",
     "gen_shader", "set_entity_shader", "set_screen_shader", "set_shader_param",
     "set_lighting", "set_ambient", "spawn_light", "set_light"

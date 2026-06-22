@@ -74,8 +74,9 @@ lighting_destroy :: proc(e: ^Engine) {
 	}
 }
 
-// Lightmap tracks logical_size: fixed 960x600 under CRT, window size otherwise
-// (recreated on resize and on editor enter/exit, which flips postfx bypass).
+// Lightmap tracks logical_size: render resolution when postfx is active,
+// window size otherwise (recreated on resize and on editor enter/exit,
+// which flips postfx bypass).
 @(private = "file")
 lighting_ensure_2d :: proc(e: ^Engine) {
 	w, h := logical_size(e)
