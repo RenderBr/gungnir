@@ -135,7 +135,10 @@ or rotating a parented child re-bases its local offset, Unity-style.
 Lights are entities: move them with `set_pos`, color them with `set_tint`,
 name/save them like anything else (the editor has a "+ light" button).
 The 2D world (and any 3D beneath it) is multiplied by ambient + lights;
-`on_gui` is never darkened. 3D models get per-pixel Lambert shading.
+`on_gui` is never darkened. 3D models get per-pixel Lambert + Blinn-Phong
+specular, distance fog (squared falloff, mixed with `set_clear_color` up to
+72%), and micro-normal detail derived from the bound albedo texture for
+photo-realistic grazing response.
 
 | Function | Notes |
 |---|---|
